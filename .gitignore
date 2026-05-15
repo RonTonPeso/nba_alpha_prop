@@ -1,0 +1,70 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Jupyter
+.ipynb_checkpoints/
+
+# frontend
+node_modules/
+.next/
+.vercel/
+out/
+*.tsbuildinfo
+
+# secrets
+# Never commit real env files. Keep .env.example committed so the shape is documented.
+.env
+.env.local
+.env.*.local
+.envrc
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Project artifacts
+# Trained models and traces are usually too large/binary for git.
+# Commit small reference artifacts under models/ deliberately if needed.
+models/*.pkl
+models/*.nc
+models/*.joblib
+
+# Cached upstream responses 
+data/cache/
+data/raw/
+
+# Logs from local runs
+logs/
+*.log
+
+# Backtest run outputs
+backtest_runs/
+
+CLAUDE.md
+PRD.md
+Roadmap.md
+Reviewer.md
