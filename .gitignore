@@ -64,7 +64,9 @@ logs/
 # Backtest run outputs
 backtest_runs/
 
+# Personal notes and documents
 CLAUDE.md
 PRD.md
 Roadmap.md
 Reviewer.md
+process.md
