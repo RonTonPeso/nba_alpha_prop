@@ -1,0 +1,38 @@
+# Local dev stack. Postgres is the only required service for `uv run uvicorn`
+# workflow. The backend service is here for parity with Railway and lets you
+# verify the Dockerfile end-to-end: `docker compose up backend`.
+#
+# Credentials below are local-only conveniences, not secrets. Production uses
+# Railway env vars.
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nba}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nba}
+      POSTGRES_DB: ${POSTGRES_DB:-nba_alpha_prop}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nba} -d ${POSTGRES_DB:-nba_alpha_prop}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-nba}:${POSTGRES_PASSWORD:-nba}@postgres:5432/${POSTGRES_DB:-nba_alpha_prop}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
