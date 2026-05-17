@@ -1,10 +1,30 @@
-# M1 Prep Notes: shufinskiy Data and Schema Design
+# M1 Prep Notes: shufinskiy Data, Schema Design, Test, ADR
 
 These notes are for Milestone 1 prep. The goal is not to implement schema yet.
 The goal is to understand the raw data shape before designing tables or writing
 Alembic.
 
-## Main Finding From shufinskiy
+Status of the four prep items:
+
+- Part 4, shufinskiy inspection: done locally in the notebook.
+- Part 1, schema design: drafted as a starting hypothesis, not final.
+- Part 3, point-in-time regression test: documented as the required test shape,
+  not implemented yet.
+- Part 2, ADR: documented as the structure and decisions to explain, not written
+  as the final recruiter-visible ADR yet.
+
+Recommended order stays:
+
+```text
+4 -> 1 -> 3 -> 2
+```
+
+Do not write Alembic before the schema sketch is reviewed. Do not write the
+final ADR before the schema and test exist.
+
+## 4. shufinskiy Data Inspection
+
+### Main Finding From shufinskiy
 
 The local file inspected was:
 
@@ -397,3 +417,161 @@ ingested_at <= as_of
 ```
 
 Everything in M1 should protect that invariant.
+
+## 3. Point-In-Time Regression Test
+
+This is the most important test in the project because it proves commitment #1:
+historical predictions cannot silently train on future data.
+
+The pattern:
+
+1. Insert one past game log that should be visible at a simulated `as_of`.
+2. Insert one future game log that should not be visible.
+3. Run the query or rolling-average function.
+4. Assert the result only uses the past row.
+5. Assert the function cannot be called without an explicit `as_of`.
+
+Plain-English example:
+
+```text
+Player 1, Game A:
+event_time = 2024-01-01
+ingested_at = 2024-01-02
+points = 20
+
+Player 1, Game B:
+event_time = 2024-01-15
+ingested_at = 2024-01-16
+points = 30
+
+Query as_of = 2024-01-10
+
+Expected rolling average = 20.0
+Incorrect leaked average = 25.0
+```
+
+The query helper should require `as_of` as a keyword-only argument:
+
+```python
+def query_player_game_logs(
+    *,
+    player_id: int,
+    as_of: datetime,
+    session: Session,
+) -> list[PlayerGameLog]:
+    ...
+```
+
+The `*,` matters. It forces callers to pass `as_of` explicitly:
+
+```python
+query_player_game_logs(player_id=1, as_of=as_of, session=session)
+```
+
+No default `as_of`. No hidden "latest data" path for historical queries.
+
+The core filter:
+
+```python
+.filter(PlayerGameLog.player_id == player_id)
+.filter(PlayerGameLog.event_time < as_of)
+.filter(PlayerGameLog.ingested_at <= as_of)
+```
+
+The regression test should fail loudly if a future row leaks in. This test
+belongs near the first query helper or baseline model, before the backtest
+harness gets complicated.
+
+## 2. ADR Prep
+
+The ADR should be written last, after the schema sketch is reviewed and the
+point-in-time regression test exists. If it is written too early, it will read
+like a wish list instead of a record of real decisions.
+
+Working title:
+
+```text
+ADR-001: M1 Schema Design for Point-in-Time Correctness
+```
+
+The ADR should explain these decisions in your own voice:
+
+- Why point-in-time correctness is a schema-level commitment, not just query
+  discipline.
+- Why fact tables use both `event_time` and `ingested_at`.
+- Why historical team identity uses `franchises` plus
+  `franchise_identities`.
+- Why game results are separate from immutable game metadata.
+- Why `player_game_logs` uses `nba_api`, not shufinskiy.
+- Why shufinskiy belongs in raw play-by-play storage.
+- Why temporal player names are out of scope for v1.
+- Why historical query helpers require explicit `as_of`.
+
+Suggested ADR structure:
+
+```markdown
+# ADR-001: M1 Schema Design for Point-in-Time Correctness
+
+## Status
+Accepted, [date]
+
+## Context
+- This project must support honest backtests.
+- Backtests can only use facts known before the simulated prediction time.
+- Mutable rows, current-state joins, and careless "latest value" queries can
+  silently leak future data.
+- shufinskiy provides raw play-by-play, not player-game box scores, so M1 uses
+  nba_api for player-game facts and shufinskiy for event-level data.
+
+## Decision
+- Use `event_time` and `ingested_at` on fact tables.
+- Use `franchises` plus `franchise_identities` for team naming over time.
+- Keep `games` metadata separate from append-only `game_results`.
+- Store player-game facts in `player_game_logs`, sourced from nba_api.
+- Store raw source rows in `raw_data`.
+- Require `as_of` in historical query helpers.
+
+## Consequences
+
+### Positive
+- Backtest queries have a clear point-in-time filter.
+- Re-ingestion and stat corrections can be represented without overwriting
+  history.
+- Team name changes do not corrupt historical joins.
+- The query API forces developers to think about time.
+
+### Negative
+- More tables than a naive schema.
+- Some queries require joins.
+- Storage is larger because raw source rows and append-only versions are kept.
+- Raw SQL can still bypass helper functions, so review and tests matter.
+
+## Alternatives Considered
+
+### Mutable game rows
+Rejected because final scores or corrected stats could overwrite prior observed
+state and make old backtests impossible to reproduce honestly.
+
+### Denormalized team names on player_game_logs
+Rejected as the only source of truth because it makes franchise history harder
+to reason about. It may still be useful as a performance denormalization later.
+
+### Full event sourcing for every table
+Rejected for v1 because it adds too much complexity before the baseline
+pipeline exists.
+
+### Deriving player_game_logs from shufinskiy play-by-play
+Rejected for M1 because shufinskiy is raw event data. Deriving points/rebounds/
+assists/minutes from events would require a transformation pipeline and
+substitution logic. nba_api box-score/player-log endpoints are the direct source
+for M1.
+
+## Open Questions
+- Whether player name changes need temporal tracking.
+- Whether raw play-by-play is loaded in M1 or deferred until lineup features.
+- Whether to add prediction versioning in M3.
+- Whether to denormalize team/player labels after profiling.
+```
+
+The most important ADR section is `Alternatives Considered`. That is where the
+engineering judgment shows up.

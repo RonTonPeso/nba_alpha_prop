@@ -20,6 +20,7 @@ coverage.xml
 
 # Jupyter
 .ipynb_checkpoints/
+*.csv
 
 # frontend
 node_modules/
