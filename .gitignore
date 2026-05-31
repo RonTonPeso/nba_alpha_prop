@@ -21,6 +21,7 @@ coverage.xml
 # Jupyter
 .ipynb_checkpoints/
 *.csv
+*.tar.xz
 
 # frontend
 node_modules/
@@ -72,3 +73,4 @@ Roadmap.md
 Reviewer.md
 process.md
 AGENTS.md
+notebook_notes.md

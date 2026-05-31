@@ -1,10 +1,21 @@
 import os
+import sys
 from logging.config import fileConfig
+from pathlib import Path
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+
+# Make backend/ importable so we can pull in the SQLModel tables.
+# env.py lives at <repo>/db/migrations/env.py, so backend/ is two up + sibling.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO_ROOT / "backend"))
+
+from sqlmodel import SQLModel  # noqa: E402
+
+from app.db import tables  # noqa: E402, F401  - import for side effects (table registration)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -20,16 +31,26 @@ if database_url:
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
+# All SQLModel table classes register themselves on SQLModel.metadata at
+# import time. The `tables` import above is what populates it.
+target_metadata = SQLModel.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
+
+
+def _render_item(type_: str, obj: object, _autogen_context: object) -> object:
+    """Emit sa.String instead of sqlmodel.sql.sqltypes.AutoString in migrations.
+
+    SQLModel uses AutoString internally for string fields. Rendering it
+    literally would require every migration file to import sqlmodel. Plain
+    sa.String is functionally identical and keeps migrations sqlmodel-free.
+    """
+    if type_ == "type" and obj.__class__.__name__ == "AutoString":
+        return "sa.String()"
+    return False
 
 
 def run_migrations_offline() -> None:
@@ -50,6 +71,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        render_item=_render_item,
     )
 
     with context.begin_transaction():
@@ -71,7 +93,9 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            render_item=_render_item,
         )
 
         with context.begin_transaction():

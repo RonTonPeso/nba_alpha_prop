@@ -7,11 +7,11 @@ Alembic.
 Status of the four prep items:
 
 - Part 4, shufinskiy inspection: done locally in the notebook.
-- Part 1, schema design: drafted as a starting hypothesis, not final.
+- Part 1, schema design: decisions locked, ready for SQLModel + Alembic.
 - Part 3, point-in-time regression test: documented as the required test shape,
   not implemented yet.
-- Part 2, ADR: documented as the structure and decisions to explain, not written
-  as the final recruiter-visible ADR yet.
+- Part 2, ADR: skeleton drafted in `docs/adr.md`, prose to be written in
+  Ronnie's voice after schema is in code and the regression test passes.
 
 Recommended order stays:
 
@@ -21,6 +21,44 @@ Recommended order stays:
 
 Do not write Alembic before the schema sketch is reviewed. Do not write the
 final ADR before the schema and test exist.
+
+## Locked M1 schema
+
+The M1 schema is six tables:
+
+```text
+players
+teams
+games
+game_results
+player_game_logs
+request_cache
+```
+
+`game_results` is in M1, separate from `games` so stat corrections are
+append-only and don't overwrite history.
+
+A `play_by_play_events` table is **deferred to M7** (lineup features). The
+section below documenting it is kept as planning context only, not as M1
+scope.
+
+No franchise/identity split. All major NBA team renames are pre-2014, and the
+2022-23+ window doesn't need temporal team identity. A simple `teams` table
+keyed by NBA official team IDs covers everything.
+
+Practical additions from `process.md`:
+
+- Write specific ingestion failure-mode tests, not one vague failure test.
+- After the `nba_api` bulk load, manually spot-check three real games against
+  Basketball Reference.
+- Draft schema in markdown first, then SQLModel classes, then generate Alembic
+  with autogenerate, then manually review every migration line.
+- Use `nba_api`'s `LeagueGameLog` endpoint for bulk loading. Per-game
+  `BoxScoreTraditionalV2` is the wrong tool and would be slow.
+- APScheduler in-process is acceptable for v1, but the daily job only runs
+  while the Railway service is alive.
+- Keep personal ownership of schema reasoning, ADR reasoning, and the
+  point-in-time regression test. Delegate boilerplate only.
 
 ## 4. shufinskiy Data Inspection
 
@@ -44,13 +82,13 @@ shufinskiy nbastats is raw play-by-play event data, not player game logs.
 That resolves the source split:
 
 - Use `nba_api` for historical and current box scores/player game logs.
-- Use shufinskiy for historical play-by-play.
+- shufinskiy is **not used in M1**; it remains a candidate source for raw
+  play-by-play when M7 lineup features land.
 - Cache every `nba_api` request in Postgres because `stats.nba.com` is
   rate-limited.
 
 This keeps M1 focused on `player_game_logs` from real box-score/player-log
-sources. Shufinskiy remains useful later for lineup, possession, and on-court
-features.
+sources.
 
 ## What The shufinskiy File Looks Like
 
@@ -121,7 +159,7 @@ Time-related fields:
 
 Schema implication: shufinskiy alone is not enough to produce an exact
 `scheduled_tip_time_utc`. For M1 game metadata, use `nba_api` schedule/box-score
-data or another source that includes game dates.
+data.
 
 ## Game Identity
 
@@ -132,7 +170,7 @@ data or another source that includes game dates.
   key, so the loader should either deduplicate exact duplicates or include a
   raw-row hash/version field.
 
-That natural key belongs on a raw `play_by_play_events` table, not on
+That natural key belongs on a (future, M7) `play_by_play_events` table, not on
 `player_game_logs`.
 
 ## Team Identity
@@ -147,8 +185,9 @@ Team identity appears inside player participant slots:
 This means a play-by-play row does not have one simple `TEAM_ID`. The team is
 attached to the event participant.
 
-Schema implication: if raw play-by-play is stored, either preserve these slots
-as raw columns or normalize event participants into a child table later.
+Schema implication for the future PBP table: either preserve these slots as
+raw columns or normalize event participants into a child table later. Not an
+M1 concern.
 
 ## Player Identity
 
@@ -177,9 +216,9 @@ M1, use `nba_api` for player-game facts.
 
 ## M1 Schema Design, Plain English
 
-The M1 schema should separate three ideas:
+The M1 schema separates three ideas:
 
-1. Stable identities: players and franchises.
+1. Stable identities: players and teams.
 2. Game-level facts: scheduled games and final results.
 3. Player-game facts: one row per player per game, with stats and timing fields.
 
@@ -200,6 +239,17 @@ not ingest it until today, then a backtest set to yesterday should not see it.
 
 ## Core Tables To Sketch Before Alembic
 
+The M1 schema is six tables:
+
+```text
+players
+teams
+games
+game_results
+player_game_logs
+request_cache
+```
+
 ### `players`
 
 Stable player identity.
@@ -214,35 +264,19 @@ Likely columns:
 V1 limitation: do not track temporal player name changes yet. Document this in
 the ADR.
 
-### `franchises`
+### `teams`
 
-Stable team/franchise identity.
+Stable team identity. NBA's official team IDs are used as the primary key.
 
 Likely columns:
 
-- `franchise_id`: internal primary key
-- `nba_team_id`: NBA official team ID, unique
+- `team_id`: NBA official team ID, primary key
+- `name`
+- `city`
+- `abbreviation`
 - `created_at`
 
-This table represents the stable entity. It should not change just because a
-team changes city, name, or abbreviation.
-
-### `franchise_identities`
-
-Historical team names and abbreviations.
-
-Likely columns:
-
-- `franchise_identity_id`
-- `franchise_id`
-- `valid_from`
-- `valid_to`
-- `city`
-- `name`
-- `abbreviation`
-
-This handles cases like Seattle/Oklahoma City without rewriting historical
-data.
+No temporal identity split. The 2022-23+ window does not need it.
 
 ### `games`
 
@@ -255,8 +289,8 @@ Likely columns:
 - `season_type`
 - `game_date`
 - `scheduled_tip_time_utc`, nullable if unknown
-- `home_franchise_id`
-- `away_franchise_id`
+- `home_team_id`
+- `away_team_id`
 - `event_time`
 - `ingested_at`
 - `created_at`
@@ -270,7 +304,7 @@ overwriting game metadata.
 
 Likely columns:
 
-- `game_result_id`
+- `game_result_id`: surrogate primary key
 - `game_id`
 - `home_score`
 - `away_score`
@@ -284,14 +318,14 @@ If the NBA revises a result, insert a new observed result with a later
 
 ### `player_game_logs`
 
-The main M1 fact table, sourced from `nba_api`, not shufinskiy.
+The main M1 fact table, sourced from `nba_api`.
 
 Likely columns:
 
 - `player_game_log_id`: surrogate primary key
 - `player_id`
 - `game_id`
-- `franchise_id`: team the player played for in this game
+- `team_id`: team the player played for in this game
 - `season`
 - `season_type`
 - `event_time`
@@ -335,11 +369,12 @@ Likely columns:
 
 This is what makes `nba_api` safe for historical bulk loading.
 
-## Optional Table For shufinskiy
+## Deferred Table: `play_by_play_events` (M7)
 
-### `play_by_play_events`
+Documented here as planning context. **Not in M1.**
 
-This is where shufinskiy belongs.
+This is where shufinskiy data would belong when raw play-by-play storage
+becomes useful for lineup features.
 
 Likely columns:
 
@@ -366,8 +401,7 @@ Likely natural key:
 (game_id, event_num)
 ```
 
-For M1, this can be documented as planned or loaded as a raw table. It should
-not be confused with `player_game_logs`. The ingestion code should still check
+Revisit when starting M7. The ingestion code at that point should still check
 for duplicate `(game_id, event_num)` rows before enforcing a unique constraint.
 
 ## Critical Indexes
@@ -400,13 +434,12 @@ That query is the database-level expression of the point-in-time commitment.
 Draw these boxes first:
 
 ```text
-franchises -> franchise_identities
-franchises -> games.home_franchise_id
-franchises -> games.away_franchise_id
+teams -> games.home_team_id
+teams -> games.away_team_id
 players -> player_game_logs
+teams -> player_game_logs
 games -> player_game_logs
 games -> game_results
-games -> play_by_play_events
 ```
 
 Then write this beside `player_game_logs`:
@@ -482,6 +515,32 @@ The regression test should fail loudly if a future row leaks in. This test
 belongs near the first query helper or baseline model, before the backtest
 harness gets complicated.
 
+## Ingestion Tests To Plan
+
+For each ingestion source, test the happy path plus concrete failure modes.
+Avoid a single vague "handles failure" test.
+
+Minimum useful failure-mode tests:
+
+- `httpx` timeout: ingestion logs failure/retries without corrupting partial
+  data.
+- `429` rate limit: ingestion respects backoff/cache behavior and does not
+  hammer the upstream API.
+- Malformed JSON: parser fails clearly and records the failed job/source
+  response.
+- Missing field/schema drift: parser catches that an expected upstream field is
+  absent and fails loudly instead of inserting misleading nulls.
+
+Manual sanity check after the `nba_api` historical bulk load:
+
+```text
+Pick three real games.
+Compare player points/rebounds/assists/minutes against Basketball Reference.
+Confirm the loaded rows match before trusting the full dataset.
+```
+
+This is cheap and catches whole-pipeline mistakes that unit tests can miss.
+
 ## 2. ADR Prep
 
 The ADR should be written last, after the schema sketch is reviewed and the
@@ -499,79 +558,18 @@ The ADR should explain these decisions in your own voice:
 - Why point-in-time correctness is a schema-level commitment, not just query
   discipline.
 - Why fact tables use both `event_time` and `ingested_at`.
-- Why historical team identity uses `franchises` plus
-  `franchise_identities`.
-- Why game results are separate from immutable game metadata.
+- Why a simple `teams` table is used instead of a temporal franchise split.
+- Why `game_results` is separate from `games`.
 - Why `player_game_logs` uses `nba_api`, not shufinskiy.
-- Why shufinskiy belongs in raw play-by-play storage.
+- Why raw play-by-play (shufinskiy or otherwise) is deferred to M7.
 - Why temporal player names are out of scope for v1.
 - Why historical query helpers require explicit `as_of`.
+- Why APScheduler-in-process is acceptable for v1 despite only running while
+  the Railway service is alive.
+- Why bulk loading uses `nba_api`'s `LeagueGameLog` endpoint and not per-game
+  box-score endpoints.
 
-Suggested ADR structure:
-
-```markdown
-# ADR-001: M1 Schema Design for Point-in-Time Correctness
-
-## Status
-Accepted, [date]
-
-## Context
-- This project must support honest backtests.
-- Backtests can only use facts known before the simulated prediction time.
-- Mutable rows, current-state joins, and careless "latest value" queries can
-  silently leak future data.
-- shufinskiy provides raw play-by-play, not player-game box scores, so M1 uses
-  nba_api for player-game facts and shufinskiy for event-level data.
-
-## Decision
-- Use `event_time` and `ingested_at` on fact tables.
-- Use `franchises` plus `franchise_identities` for team naming over time.
-- Keep `games` metadata separate from append-only `game_results`.
-- Store player-game facts in `player_game_logs`, sourced from nba_api.
-- Store raw source rows in `raw_data`.
-- Require `as_of` in historical query helpers.
-
-## Consequences
-
-### Positive
-- Backtest queries have a clear point-in-time filter.
-- Re-ingestion and stat corrections can be represented without overwriting
-  history.
-- Team name changes do not corrupt historical joins.
-- The query API forces developers to think about time.
-
-### Negative
-- More tables than a naive schema.
-- Some queries require joins.
-- Storage is larger because raw source rows and append-only versions are kept.
-- Raw SQL can still bypass helper functions, so review and tests matter.
-
-## Alternatives Considered
-
-### Mutable game rows
-Rejected because final scores or corrected stats could overwrite prior observed
-state and make old backtests impossible to reproduce honestly.
-
-### Denormalized team names on player_game_logs
-Rejected as the only source of truth because it makes franchise history harder
-to reason about. It may still be useful as a performance denormalization later.
-
-### Full event sourcing for every table
-Rejected for v1 because it adds too much complexity before the baseline
-pipeline exists.
-
-### Deriving player_game_logs from shufinskiy play-by-play
-Rejected for M1 because shufinskiy is raw event data. Deriving points/rebounds/
-assists/minutes from events would require a transformation pipeline and
-substitution logic. nba_api box-score/player-log endpoints are the direct source
-for M1.
-
-## Open Questions
-- Whether player name changes need temporal tracking.
-- Whether raw play-by-play is loaded in M1 or deferred until lineup features.
-- Whether to add prediction versioning in M3.
-- Whether to denormalize team/player labels after profiling.
-```
-
-The most important ADR section is `Alternatives Considered`. That is where the
-engineering judgment shows up.
+The skeletal structure plus a Claude-drafted casual-voice version both live in
+`docs/adr.md`. Use the skeleton to fill in the real prose. Use the Claude draft
+as reference, not as the final text. The Alternatives Considered section is
+where engineering judgment shows up.
