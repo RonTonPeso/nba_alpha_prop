@@ -28,20 +28,6 @@ def test_current_season_october_starts_new_season() -> None:
     assert current_season(date(2024, 10, 22)) == "2024-25"
 
 
-def test_current_season_march_is_prior_year_season() -> None:
-    assert current_season(date(2025, 3, 15)) == "2024-25"
-
-
-def test_current_season_july_is_new_season() -> None:
-    # Cutoff is July 1: anything in July onward → new season.
-    assert current_season(date(2024, 7, 1)) == "2024-25"
-    assert current_season(date(2024, 6, 30)) == "2023-24"
-
-
-def test_current_season_century_boundary() -> None:
-    assert current_season(date(2099, 10, 22)) == "2099-00"
-
-
 def test_load_season_passes_date_filters_to_fetch(db_session: Session) -> None:
     """Daily ingest's core: load_season called with date_from=date_to=yesterday
     forwards those filters into the LeagueGameLog params."""

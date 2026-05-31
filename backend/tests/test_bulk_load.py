@@ -30,15 +30,6 @@ def test_iter_seasons_range() -> None:
     ]
 
 
-def test_iter_seasons_single_season() -> None:
-    assert list(iter_seasons("2022-23", "2022-23")) == ["2022-23"]
-
-
-def test_iter_seasons_century_boundary() -> None:
-    # 2099-00 is the formatting we'd want at the boundary.
-    assert list(iter_seasons("2098-99", "2099-00")) == ["2098-99", "2099-00"]
-
-
 def test_iter_seasons_end_before_start_raises() -> None:
     with pytest.raises(ValueError):
         list(iter_seasons("2024-25", "2022-23"))

@@ -74,3 +74,6 @@ Reviewer.md
 process.md
 AGENTS.md
 notebook_notes.md
+
+# Notebook data files (large, downloadable)
+*.tar.xz

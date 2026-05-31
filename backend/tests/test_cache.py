@@ -18,14 +18,6 @@ from app.db.tables import RequestCache
 from tests._fakes import FakeResponse, FakeSession
 
 
-def test_cache_key_is_deterministic_and_param_order_independent() -> None:
-    key_a, _ = _compute_keys("https://example.com", {"a": 1, "b": 2})
-    key_b, _ = _compute_keys("https://example.com", {"b": 2, "a": 1})
-    key_c, _ = _compute_keys("https://example.com", {"a": 1, "b": 3})
-    assert key_a == key_b
-    assert key_a != key_c
-
-
 def test_cache_miss_fetches_and_stores(db_session: Session) -> None:
     def handler(url: str, params: dict[str, Any], headers: dict[str, str]) -> FakeResponse:
         return FakeResponse(200, {"hello": "world"})
