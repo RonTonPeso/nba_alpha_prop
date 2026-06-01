@@ -4,6 +4,10 @@ from app.db.engine import get_engine, get_session
 from app.db.tables import (
     Game,
     GameResult,
+    KalshiPlayerAlias,
+    Market,
+    MarketSettlement,
+    MarketSnapshot,
     Player,
     PlayerGameLog,
     RequestCache,
@@ -13,6 +17,10 @@ from app.db.tables import (
 __all__ = [
     "Game",
     "GameResult",
+    "KalshiPlayerAlias",
+    "Market",
+    "MarketSettlement",
+    "MarketSnapshot",
     "Player",
     "PlayerGameLog",
     "RequestCache",

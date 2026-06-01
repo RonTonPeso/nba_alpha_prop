@@ -73,13 +73,32 @@ def test_cache_propagates_429_and_does_not_store(db_session: Session) -> None:
         return FakeResponse(429, {"error": "rate limited"})
 
     session = FakeSession(handler)
-    cache = CachedHttpClient(db_session, client=session)
+    # max_retries=0 so we don't sleep through the backoff schedule.
+    cache = CachedHttpClient(db_session, client=session, max_retries=0)
 
     with pytest.raises(HTTPError):
         cache.get("https://example.com/limited")
 
     cache_key, _ = _compute_keys("https://example.com/limited", None)
     assert db_session.get(RequestCache, cache_key) is None
+
+
+def test_cache_retries_on_429_then_succeeds(db_session: Session) -> None:
+    """First two attempts 429, third returns 200. Verifies the 429 retry loop."""
+    attempts = [0]
+
+    def handler(url: str, params: dict[str, Any], headers: dict[str, str]) -> FakeResponse:
+        attempts[0] += 1
+        if attempts[0] < 3:
+            return FakeResponse(429, {"error": "rate limited"})
+        return FakeResponse(200, {"ok": True})
+
+    session = FakeSession(handler)
+    cache = CachedHttpClient(db_session, client=session, max_retries=3, retry_backoff_seconds=0.0)
+
+    body = cache.get("https://example.com/sometimes-limited")
+    assert body == {"ok": True}
+    assert attempts[0] == 3
 
 
 # ----- 3. Malformed JSON -----

@@ -126,15 +126,19 @@ class CachedHttpClient:
         params: dict[str, Any] | None,
         headers: dict[str, str] | None,
     ) -> Any:
-        """Retry on timeout. stats.nba.com is sometimes slow even via curl_cffi.
+        """Retry on timeout or HTTP 429.
 
         Exponential backoff: 2s, 4s, 8s for default retry_backoff_seconds=2.
-        Other exceptions (HTTPError, JSONDecodeError) are NOT retried; they
+
+        - Timeout: stats.nba.com is sometimes slow even via curl_cffi.
+        - 429: Kalshi rate-limits transiently; backoff usually clears it.
+
+        Other HTTP errors (4xx/5xx, JSONDecodeError) are NOT retried; they
         usually indicate something structural rather than transient.
         """
         for attempt in range(self._max_retries + 1):
             try:
-                return self._http_client.get(
+                response = self._http_client.get(
                     url, params=params, headers=headers, timeout=self._timeout
                 )
             except CurlTimeout:
@@ -149,6 +153,21 @@ class CachedHttpClient:
                     self._max_retries + 1,
                 )
                 time.sleep(delay)
+                continue
+
+            if response.status_code == 429 and attempt < self._max_retries:
+                delay = self._retry_backoff_seconds * (2**attempt)
+                logger.warning(
+                    "HTTP 429 from %s; retrying in %.1fs (attempt %d/%d)",
+                    url,
+                    delay,
+                    attempt + 1,
+                    self._max_retries + 1,
+                )
+                time.sleep(delay)
+                continue
+
+            return response
         raise RuntimeError("unreachable")  # pragma: no cover
 
     def _lookup(self, cache_key: str) -> Any:
