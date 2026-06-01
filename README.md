@@ -1,6 +1,5 @@
 # NBA Player Props, Forecast Honestly
 
-**Live dashboard:** https://nba-alpha-prop.vercel.app/
 **Backend health:** https://gregarious-friendship-production-b0f6.up.railway.app/health
 
 I built a system that watches NBA player prop markets on Kalshi, forecasts how many points, rebounds, and assists each player will actually get, and flags the cases where the market price disagrees with the forecast in an interesting way.
