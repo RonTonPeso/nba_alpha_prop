@@ -2,7 +2,7 @@
 
 **Backend health:** https://gregarious-friendship-production-b0f6.up.railway.app/health
 
-I built a system that watches NBA player prop markets on Kalshi, forecasts how many points, rebounds, and assists each player will actually get, and flags the cases where the market price disagrees with the forecast in an interesting way.
+I built a forecasting system that pulls NBA player prop prices from Kalshi, uses a hierarchical Bayesian model wrapping an XGBoost feature predictor to produce calibrated posterior distributions over points, rebounds, and assists, and surfaces the props where the market price disagrees with the posterior.
 
 > This is a portfolio project, not a betting tool. No real money moves through it. The point is to demonstrate engineering and modeling judgment end-to-end.
 ## What the dashboard shows
