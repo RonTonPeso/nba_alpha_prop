@@ -77,3 +77,5 @@ notebook_notes.md
 
 # Notebook data files (large, downloadable)
 *.tar.xz
+adr.md
+docs/
