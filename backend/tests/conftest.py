@@ -16,6 +16,10 @@ from app.db.engine import get_engine
 from app.db.tables import (
     Game,
     GameResult,
+    KalshiPlayerAlias,
+    Market,
+    MarketSettlement,
+    MarketSnapshot,
     Player,
     PlayerGameLog,
     RequestCache,
@@ -50,7 +54,18 @@ def db_session(db_engine: Engine) -> Iterator[Session]:
 
     # Wipe in FK-safe order. All deletes are part of the outer transaction
     # and are undone by the rollback in the finally block below.
-    for table in (PlayerGameLog, GameResult, Game, Player, Team, RequestCache):
+    for table in (
+        MarketSnapshot,
+        MarketSettlement,
+        Market,
+        KalshiPlayerAlias,
+        PlayerGameLog,
+        GameResult,
+        Game,
+        Player,
+        Team,
+        RequestCache,
+    ):
         session.execute(delete(table))
     session.flush()
 
