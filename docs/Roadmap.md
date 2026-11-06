@@ -178,7 +178,7 @@ There are no features yet. That is the point. Getting deployment unblocked early
 
 ## M3: Baseline Model + Skeleton Backtest Harness
 
-**Status:** In progress (2026-11-06). Baseline, `predictions` table, 16:00 UTC job, and `python -m app.backtest.run` are on branch `m3-baseline`. Design notes are in `docs/provenance/m3-baseline.md`. The "beats 50% on a held-out month" line is not claimed yet. January 2025 has no Kalshi lines (coverage starts November 2025), and bulk-loaded `ingested_at` values sit on the fetch day, so a 2025 replay that keeps the point-in-time filter will not see those rows.
+**Status:** Merged (PR #3, 2026-11-06). Baseline, `predictions` table, 16:00 UTC job, and `python -m app.backtest.run` are on main. Design notes are in `docs/provenance/m3-baseline.md`. Hit rate above 50% on a held-out month is still not claimed. January 2025 has no Kalshi lines (coverage starts November 2025), and bulk-loaded `ingested_at` values sit on the fetch day, so a 2025 replay that keeps the point-in-time filter will not see those rows.
 
 **Effort:** ~15-20 hours
 
@@ -210,28 +210,33 @@ There are no features yet. That is the point. Getting deployment unblocked early
 
 ## M4: Backtest Harness with Calibration Metrics
 
+**Status:** In progress (2026-11-06), branch `m4-calibration`. The revisions below are written up in `docs/provenance/m4-calibration.md`.
+
 **Effort:** ~10-15 hours
 
-**Goal:** The backtest harness produces serious model evaluation outputs: Brier score, log loss, calibration curves, edge realization plots.
+**Goal:** The same replay scores the baseline as a probability: Brier score, log loss, a reliability diagram, and a count of disagreements with the pre-tip yes mid.
 
 **Tasks:**
-- Brier score and log loss implementations with unit tests against known values
-- Calibration plot generator (predicted probability buckets vs realized rate)
-- Edge realization analysis (predicted edge vs realized return)
-- Backtest report generator: writes markdown reports with embedded plots to `docs/results/`
-- CI smoke test: a tiny backtest (1 week, 5 players) runs on every PR and fails if calibration drifts badly
+- Brier score and log loss, with unit tests against hand-computed values
+- Ten equal-width probability bins, a markdown table, and an SVG reliability diagram
+- Disagreement count against the yes mid, only when a snapshot is visible at 16:00 UTC
+- Markdown report in `docs/results/`
+- CI smoke test on a synthetic week (5 players, 7 days, one contract each) inside the existing pytest job
 
 **Considerations:**
 - Implement metrics with synthetic test data first. Compute Brier on a fake dataset with known properties and confirm the answer matches the hand-computed value. This is the only way to be sure the metric implementation is correct.
-- Reports are the most useful artifact of this milestone. Make them readable. A recruiter clicking through `docs/results/` should be able to understand the model's track record without running anything.
+- Reports are the most useful artifact of this milestone. Make them readable. A recruiter clicking through `docs/results/` should be able to tell a synthetic fixture from a real month.
+- The stored forecast is a normal mean and std. The probability is that normal's upper tail at the line. It is not a posterior.
 
 **Branch points:**
-- *Build the calibration view in the dashboard now or in M8?* Default: M8. Build the data layer here, render later.
-- *How granular should calibration buckets be?* Default: 10 bins (deciles of predicted probability). Adjust if data is sparse.
+- *Build the calibration view in the dashboard now or in M8?* M8. This milestone writes the table and the SVG. The dashboard renders later.
+- *How granular should calibration buckets be?* Ten equal-width bins on [0, 1], not equal-count deciles. Chosen 2026-11-06. The baseline piles up near one probability, and equal-count bins would look calibrated because of how they are cut. Empty bins stay in the table.
+- *Score predicted edge against realized return?* Not in this milestone. Chosen 2026-11-06. The project does not book trades. The report counts how often the side priced above the quoted mid happened. No payout, no expected value.
+- *Fail CI when a one-week sample is miscalibrated?* No. Chosen 2026-11-06. Five players over seven days is too small for that gate, and CI does not load the season. The smoke test locks the synthetic Brier score. A large calibration error is printed in the report and does not fail the job.
 
 **Acceptance:**
 - Metrics produce correct values on synthetic test data
-- A real backtest report exists in `docs/results/` with at least one month of data
+- A backtest report exists in `docs/results/` for a real month, including the case where the point-in-time filter leaves the probability section empty
 - CI smoke test runs and passes
 
 ---
