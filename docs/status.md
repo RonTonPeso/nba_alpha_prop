@@ -15,7 +15,22 @@ The original README said the build runs M0 through M10. Milestone writeups for M
 | Modeling, backtest, alerts, HTTP API beyond `/health` | `backend/app/models`, `backtest`, `alerts`, `api` are empty packages | Not started |
 | Dashboard views | `frontend/app/page.tsx` is a placeholder | Not started |
 
-`main` and `kalshi-pipe` diverged. `main` has two later README commits. `kalshi-pipe` has the Kalshi implementation and ADR-3. A straight merge has to keep the honest README and take the Kalshi code.
+## Branches
+
+Fetched from GitHub on 6 Nov 2026. Four branches exist. One of them is the status doc from this session.
+
+| Branch | Tip | What it is |
+| --- | --- | --- |
+| `main` | `039efd6`, 31 May 2026 | M0 and M1, plus the README that describes the finished product. |
+| `m1-start` | `bfcfd84`, 30 May 2026 | Fully merged into `main` as PR #1. No commits of its own remain. The tip commit deletes `notebooks/notebook_notes.md` and `backend/tests/test_spot_check.py`. |
+| `kalshi-pipe` | `c65c419`, 15 Jun 2026, 3:54 PM ET | The only unmerged work. Three commits: Kalshi ingestion (`221cc5f`, 31 May), alias auto-match plus a `PlayIn` season-type choice (`7d746df`, 15 Jun), then the M2 migration, ADR-3, and a gitignore change (`c65c419`, 15 Jun). |
+| `cursor/project-status-fb24` | this status writeup | Documentation. Not product code. |
+
+`kalshi-pipe` branched from `072cf9f` (the "finished portfolio" README). `main` then added two more README commits, so the histories diverged by those README edits on one side and the Kalshi commits on the other.
+
+The last `kalshi-pipe` commit appends `adr.md` and `docs/` to `.gitignore`. `docs/adr.md` stayed in git only because it was already tracked. A later `git add` of a new file under `docs/` would silently skip it. Landing M2 means taking the Kalshi code and dropping those two ignore lines.
+
+`kalshi-pipe` also changes shared M1 code, not just new files: the HTTP cache retries HTTP 429 (Kalshi rate limits) with the same backoff as timeouts, and `bulk_load --season-type` accepts `PlayIn` alongside `Regular Season` and `Playoffs`. The daily job is still regular season only.
 
 ## What M1 actually contains
 

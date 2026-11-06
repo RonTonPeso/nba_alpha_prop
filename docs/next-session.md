@@ -25,7 +25,9 @@ Commit at the end of each checkpoint with a message that names the checkpoint. P
 
 Bring `origin/kalshi-pipe` onto this branch.
 
-- Take the Kalshi modules, tests, migration `124f1a7e317d`, scheduler job, table changes, and ADR-3.
+- Take the Kalshi modules, tests, migration `124f1a7e317d`, scheduler job, table changes, ADR-3, the 429 retry in `CachedHttpClient`, and the `PlayIn` season-type choice.
+- Do not take the two lines `kalshi-pipe` added at the bottom of `.gitignore` (`adr.md` and `docs/`). Those would hide new files in `docs/`, including the overnight log. `docs/adr.md` is already tracked; leave it tracked.
+- `m1-start` is already merged into `main`. Do not revive it.
 - Keep the README, `docs/status.md`, and `docs/adr-template.md` from this branch. `main` and `kalshi-pipe` both edited `docs/adr.md`; the result should contain ADR-1, ADR-2, and ADR-3, with the template staying in its own file.
 - Fix only mechanical rebase breakage.
 - `*.csv` is gitignored, so `kalshi_player_aliases.csv` cannot be committed until a negation is added. Do not add a negation, and do not create a fake CSV. Note the missing file in `docs/overnight-log.md`.
