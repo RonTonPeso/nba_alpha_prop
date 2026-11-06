@@ -15,65 +15,6 @@ Written 6 Nov 2026 on `m4-calibration`, based on `3abadf1`. Replace this section
 3. Paste the prompt below.
 4. M4 calls for a second, cross-model pass. `docs/CLAUDE.md` and `docs/PRD.md` are gitignored, so paste them into that session. A clone does not have them.
 
-### Prompt to paste
-
-````
-You are a senior engineer reviewing code for a portfolio project you have not previously seen. Give an honest, thorough, opinionated review. The project forecasts NBA player props and scores those forecasts. Its main promise is that backtests are point-in-time correct.
-
-Read first:
-- docs/CLAUDE.md (architectural commitments, anti-patterns, things to flag)
-- docs/PRD.md section 6.3 (backtesting infrastructure)
-- docs/Roadmap.md, M3 and M4
-- The original M4 text, from before this work rewrote it: git show 3abadf1:docs/Roadmap.md
-
-Part 1: M4, in depth.
-Scope: everything changed since 3abadf1. That is backend/app/backtest/ (metrics.py, plots.py, quotes.py, run.py), backend/tests/test_calibration.py, backend/tests/test_calibration_db.py, backend/tests/test_baseline_db.py, docs/provenance/m4-calibration.md, and docs/results/m4-*. Use git diff 3abadf1 and include untracked files if the work is not committed yet.
-
-Part 2: the codebase, more lightly.
-Read backend/app/models/predict.py, backend/app/db/queries.py, backend/app/scheduler.py, backend/tests/conftest.py, and .github/workflows/ci.yml. Report anything that undermines what M4 claims, or that M5 will inherit.
-
-Form your own view from the code before you read docs/Reviewer.md. Then read its section "Codebase status and measured facts". Those are claims from the session that prepared this review, so reproduce them rather than trusting them, and say if any are wrong. The local Postgres is populated. Query it read-only. Do not run the replay, because it commits rows to predictions. The tests are safe: they run inside a rolled-back transaction.
-
-Answer these directly:
-1. M4 changed its own goal, tasks, and acceptance in the same diff as the code. Judge the work against the original text and against the rewrite. Which changes are justified, and which only make the milestone easier to pass?
-2. Does any report in docs/results/ lead a reader to a stronger conclusion than the data supports? Follow each headline number back to the rows behind it: which games, which players, and what history was visible.
-3. Does each point-in-time rule hold on every path that reaches a score: features, lines, quotes, and outcomes? Is an unfiltered read a leak, or a defensible choice?
-4. Do the tests fail if the behavior they name breaks? Which of them actually run in CI?
-5. Is the ingested_at design workable for backtesting a period that was bulk loaded later? If not, what decision does the project owe before M5? Name the options and the tradeoffs. Do not implement one.
-
-Also look for:
-- Bugs and correctness issues: edge cases, and error paths that fail silently.
-- Violations of the three commitments in docs/CLAUDE.md. Lineup-conditional projections and the Bayesian layer are planned for later milestones and are not expected yet. Point-in-time correctness applies now.
-- Redundancy and complexity that does not earn its keep.
-- Test gaps.
-- Security issues.
-- Documentation gaps, including major decisions with no ADR and docs that contradict the code.
-
-Classify each finding:
-- Blocking: must fix before merging. Correctness bugs, security issues, commitment violations, and claims the data does not support.
-- Important: should fix soon. Significant test gaps, meaningful redundancy, design issues that will compound.
-- Suggestion: consider for later.
-
-Be specific, with file:line references and the concrete failure. If a category is clean, say so. Do not manufacture findings. Do not write fix code.
-
-Format:
-
-## Summary
-(2-3 sentences on overall quality and the most important takeaway)
-
-## Blocking
-## Important
-## Suggestions
-(each with file:line references)
-
-## Answers to the five questions
-
-## Status claims checked
-(each one confirmed, wrong, or not checked)
-
-## What's done well
-(2-3 specific things, with file references)
-````
 
 ### Codebase status and measured facts
 
