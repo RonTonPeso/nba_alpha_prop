@@ -1,8 +1,9 @@
 """APScheduler setup for in-process scheduled jobs.
 
-Registers two jobs:
+Registers three jobs:
 
 - ``daily_ingest`` at 12:00 UTC: pulls yesterday's NBA box scores.
+- ``daily_predict`` at 16:00 UTC: baseline forecasts for today's Kalshi props.
 - ``kalshi_snapshot`` every 5 minutes: snapshots active Kalshi NBA
   prop markets and opportunistically writes settlements for any market
   that finalized since last tick.
@@ -21,6 +22,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.data.daily import run_daily_ingest
 from app.data.kalshi_snapshot import run_snapshot
+from app.models.predict import run_daily_predictions
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +37,21 @@ def make_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=3600,
     )
     scheduler.add_job(
+        run_daily_predictions,
+        CronTrigger(hour=16, minute=0, timezone="UTC"),
+        id="daily_predict",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    scheduler.add_job(
         run_snapshot,
         IntervalTrigger(minutes=5),
         id="kalshi_snapshot",
         replace_existing=True,
         misfire_grace_time=60,
     )
-    logger.info("Scheduler configured: daily_ingest at 12:00 UTC, kalshi_snapshot every 5 min")
+    logger.info(
+        "Scheduler configured: daily_ingest 12:00 UTC, daily_predict 16:00 UTC, "
+        "kalshi_snapshot every 5 min"
+    )
     return scheduler

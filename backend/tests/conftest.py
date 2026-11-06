@@ -22,6 +22,7 @@ from app.db.tables import (
     MarketSnapshot,
     Player,
     PlayerGameLog,
+    Prediction,
     RequestCache,
     Team,
 )
@@ -55,6 +56,7 @@ def db_session(db_engine: Engine) -> Iterator[Session]:
     # Wipe in FK-safe order. All deletes are part of the outer transaction
     # and are undone by the rollback in the finally block below.
     for table in (
+        Prediction,
         MarketSnapshot,
         MarketSettlement,
         Market,

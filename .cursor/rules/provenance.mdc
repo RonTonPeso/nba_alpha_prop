@@ -1,0 +1,19 @@
+---
+description: Record design choices in a provenance note an interviewer could question
+alwaysApply: true
+---
+
+# Provenance for every change
+
+When you change this repo, add or update a note under `docs/provenance/` in the same work. Write it for a skeptical interviewer, not as a changelog of file names.
+
+Cover:
+
+- Which milestone or spec the change serves (`docs/Roadmap.md`, `docs/PRD.md`, `docs/CLAUDE.md`). Quote the acceptance line you are aiming at.
+- The choice, then the alternative you rejected, then why. One short paragraph per decision.
+- What would make the choice wrong, and which test or report would show that.
+- Anything you did not verify (database down, no real-month score, a clock you could not observe).
+
+Do not mark a roadmap acceptance item done unless the command or test that proves it has been run and the result is in the note.
+
+Keep personal planning files gitignored (`Roadmap.md`, `PRD.md`, `process.md`, `CLAUDE.md`, `Reviewer.md`, `AGENTS.md`). The provenance note is the version that can be committed.

@@ -6,6 +6,10 @@ request_cache.
 M2 tables: markets, market_snapshots, market_settlements,
 kalshi_player_aliases. See ADR-3 in docs/adr.md.
 
+M3 table: predictions. One row per (player, game, prop, model version).
+prediction_time is when the forecast claims to have been made.
+ingested_at is when this system stored the row.
+
 Fact tables (games, game_results, player_game_logs, market_snapshots,
 market_settlements) carry both event_time (when the fact was true in
 the world) and ingested_at (when this system recorded it). Backtest
@@ -23,7 +27,7 @@ Mapping tables (kalshi_player_aliases) carry created_at only.
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Column, DateTime, Index
+from sqlalchemy import Column, DateTime, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlmodel import Field, SQLModel
@@ -376,6 +380,65 @@ class KalshiPlayerAlias(SQLModel, table=True):
             server_default=func.now(),
             nullable=False,
         ),
+    )
+
+
+# M3: stored forecasts
+
+
+class Prediction(SQLModel, table=True):
+    """One forecast of a counting stat for one player in one game.
+
+    The row is the distribution summary, not a pick against a Kalshi line.
+    Lines are joined at scoring time so one forecast can be checked against
+    every strike Kalshi listed.
+
+    Same (player, game, prop, model_version) is written once. A later run
+    skips. A changed model is a new model_version, not an overwrite.
+    """
+
+    __tablename__ = "predictions"
+    __table_args__ = (
+        UniqueConstraint(
+            "player_id",
+            "game_id",
+            "prop_type",
+            "model_version",
+            name="uq_predictions_player_game_prop_version",
+        ),
+        Index("ix_predictions_player_time", "player_id", "prediction_time"),
+        Index("ix_predictions_game", "game_id"),
+    )
+
+    prediction_id: int | None = Field(default=None, primary_key=True)
+    player_id: int = Field(foreign_key="players.player_id")
+    game_id: str = Field(foreign_key="games.game_id")
+    prop_type: str  # "points" | "rebounds" | "assists"
+    model_version: str
+
+    prediction_time: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    ingested_at: datetime = Field(
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+
+    # Normal approximation of the baseline. Not a claim that the stat is normal.
+    mean: float
+    std: float
+    quantile_10: float
+    quantile_50: float
+    quantile_90: float
+    n_games: int
+    low_confidence: bool
+
+    payload: dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSONB, nullable=False),
     )
 
 

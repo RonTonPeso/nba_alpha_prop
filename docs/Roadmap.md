@@ -1,0 +1,480 @@
+# Roadmap
+
+A living document. Update it when reality diverges from the plan, which it will.
+
+## How to use this document
+
+This is a guide, not a contract. Three rules for keeping it useful:
+
+1. **Edit it.** When something changes (scope shifts, a milestone reveals it's harder than expected, a tool gets swapped), update this file in the same commit. A stale roadmap is worse than no roadmap.
+2. **Read the current milestone before each work session.** Five minutes at the start to re-orient. Skip the milestones you have already shipped.
+3. **Treat effort estimates as guesses.** They're here to set rough expectations, not to bind you. The Bayesian milestone is going to take longer than you think; the others may take less.
+
+The roadmap has eleven milestones (M0 through M10). Each has:
+- A goal (what success looks like)
+- Tasks (concrete things to build)
+- Considerations (things to think about while building)
+- Branch points (decision moments where you may diverge from the default)
+- Acceptance (when to call the milestone done)
+- Rough effort estimate
+
+For acceptance criteria of specific features, see `docs/PRD.md`. For the project's architectural commitments and tech stack, see `docs/CLAUDE.md`. For schema and ADR-level decisions, see `docs/adr.md`. This roadmap is the temporal sequence; those are the spec.
+
+## A realistic look at total effort
+
+Best estimate: 200-300 hours of focused work across all milestones. At 8-12 hours/week, that translates to roughly 20-30 weeks (5-7 months) from M0 to M10. The PRD's earlier 8-12 week estimate was optimistic; this is the honest version. If life gets in the way for a few weeks at a time, expect 6-9 months calendar time.
+
+## Pre-flight checklist (before M0)
+
+Mostly done; left as a record of what setup looked like.
+
+- [x] GitHub repo created (public, MIT licensed)
+- [x] Repo cloned locally
+- [x] `docs/CLAUDE.md` (moved here from repo root)
+- [x] `docs/PRD.md`
+- [x] `docs/Roadmap.md` (this file)
+- [x] `~/.claude/CLAUDE.md` with global working preferences
+- [x] `.gitignore` at root
+- [x] `.env.example` at root
+- [x] Local `.env` with `ANTHROPIC_API_KEY`, gitignored
+- [x] Anthropic API budget cap set
+- [x] Python 3.11+ installed
+- [x] Node 18+ installed
+- [x] Docker Desktop installed
+- [x] `uv` installed (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- [x] Claude Code installed and authenticated
+- [ ] McElreath's *Statistical Rethinking* obtained (book or free lectures); start chapter 1 this week regardless of which milestone you're on
+
+---
+
+## M0: Setup & Skeleton
+
+**Status:** Done (2026-05-15). Backend at Railway, frontend at Vercel, CI on every PR, health check live.
+
+**Effort:** ~10-15 hours
+
+**Goal:** Repo skeleton is live. Backend and frontend exist as empty shells. Postgres runs locally in Docker. CI runs on every PR. Health check is reachable from a Railway URL and a Vercel URL.
+
+There are no features yet. That is the point. Getting deployment unblocked early prevents it from being a panic later.
+
+**Tasks:**
+- Backend skeleton: `pyproject.toml` via `uv init`, FastAPI app with `/health` endpoint, basic project structure matching CLAUDE.md's repo layout
+- Dockerfile at `backend/`
+- `docker-compose.yml` at repo root with Postgres service
+- Alembic initialized (no migrations yet, just the scaffolding)
+- Frontend skeleton: Next.js + TypeScript + Tailwind + TanStack Query installed, one empty page
+- Pre-commit hooks via `.pre-commit-config.yaml`: ruff, black, mypy
+- GitHub Actions workflow at `.github/workflows/ci.yml`: runs pytest, ruff, mypy, plus frontend lint on every PR
+- Deploy backend to Railway (just the `/health` endpoint)
+- Deploy frontend to Vercel (just the empty Next.js page)
+- README placeholder explaining the project is under construction
+
+**Considerations:**
+- Resist the urge to add anything else. The point of M0 is the skeleton.
+- The first Claude Code session lives here. Use it to set up the skeleton, not to write business logic. Walk through every generated file.
+- Test that hot reload works locally for both backend (uvicorn `--reload`) and frontend (`next dev`).
+- Confirm CI is actually running on PRs by opening a tiny PR (add a comment to a file) and watching the checks.
+
+**Branch points:**
+- *Sentry now or post-v1?* Default: post-v1. Skip during M0.
+- *Branch protection on main now or later?* Default: now. Cheap to set up, free signal of discipline.
+- *Single repo or split frontend/backend repos?* Default: single repo (monorepo-ish). Easier to coordinate, easier for recruiters to see the whole thing.
+
+**Acceptance:**
+- `docker compose up -d` brings up Postgres locally
+- `uv run uvicorn app.main:app --reload` runs the backend locally
+- `npm run dev` runs the frontend locally
+- Visiting Railway URL returns 200 from `/health`
+- Visiting Vercel URL renders the bare Next.js page
+- A test PR triggers CI and CI passes
+
+---
+
+## M1: NBA Data Ingestion + Schema Foundation
+
+**Status:** Done (2026-05-30). Six tables live with strict point-in-time correctness, `CachedHttpClient` over `curl_cffi` (chrome120 fingerprint) wrapping a Postgres-backed `request_cache`, bulk historical loader for 2022-23 onward via `LeagueGameLog` (one call per season per PlayerOrTeam value), daily ingest job for new games, four failure-mode tests (timeout, 429, malformed JSON, missing field), spot-check helper. The Bulk load was extended in M2 to also cover `Playoffs` and `PlayIn` season types when Kalshi market data revealed those games were needed for FK resolution.
+
+**Branch points hit:**
+- Used `curl_cffi` instead of httpx for `stats.nba.com` because httpx's TLS fingerprint was triggering 403s even with browser-like headers. Same wrapper interface, different transport; no callers cared.
+- Stuck with the default 2022-23 start window; no need to go back further yet.
+- SQLModel chosen over raw SQLAlchemy as planned.
+
+**Effort:** ~20-30 hours
+
+**Goal:** Historical NBA box scores are in Postgres with strict point-in-time correctness. A daily job pulls new games during the season. The schema design has an ADR explaining the choices.
+
+**Tasks:**
+- Database schema: six tables. Fact tables (`games`, `game_results`, `player_game_logs`) carry both `event_time` and `ingested_at`. Identity tables (`players`, `teams`) carry `created_at`. Infrastructure: `request_cache`.
+- ADR at `docs/adr.md` explaining the schema and why point-in-time correctness flows through it
+- Alembic migrations creating the schema
+- Postgres-backed `request_cache` plus a `CachedHttpClient` wrapper around httpx, so every outbound call is keyed, cached, and replay-safe
+- Bulk historical load script using the `LeagueGameLog` endpoint at `https://stats.nba.com/stats/leaguegamelog`. Two calls per season: `PlayerOrTeam=P` for `player_game_logs` + player identity, `PlayerOrTeam=T` for `games`, `game_results`, team identity. 2022-23 onward. No `nba_api` Python library dependency; we hit the endpoint directly through the cached wrapper with browser-like headers.
+- Daily ingestion job uses the same `LeagueGameLog` endpoint with `DateFrom`/`DateTo` set to yesterday. Same parser code path as the bulk load.
+- Tests covering the ingestion happy path plus four specific failure modes: httpx timeout, 429 rate limit, malformed JSON, missing field (upstream schema drift)
+- Spot-check helper that prints three random games' box scores so they can be eyeballed against basketball-reference.com before the bulk load is declared trustworthy
+
+**Considerations:**
+- Players get traded, retire, have name changes. Store a stable `player_id` (NBA's official ID) and put `team_id` on the game log, not on the player record.
+- The schema is foundational. Get it right. Spend extra time here; it pays off later.
+- `stats.nba.com` rate-limits aggressively and returns 403 without browser-like headers. `CachedHttpClient` does the fetch once, stores the JSON in `request_cache`, and serves repeats from Postgres. Without that wrapper the bulk load is fragile.
+- Bulk historical play-by-play (shufinskiy / pbpstats) is deferred to M7 when lineup features need it. Shufinskiy was investigated in `notebooks/explore_shuf.ipynb`; takeaway was that it's raw events, not box scores, so it's the wrong source for `player_game_logs`.
+- The franchise / temporal-identity split was considered and rejected. Major NBA renames are pre-2014; our 2022-23+ window doesn't cross any. A single `teams` table keyed by NBA's team ID covers everything.
+- Don't try to ingest everything. 2022-23 onward is plenty. Backfill more later if needed.
+
+**Branch points:**
+- *How far back to load?* Default: 2022-23 season. Going back to 2018-19 doubles storage but provides more training data. Defer to M5 if needed.
+- *Normalize via foreign keys or denormalize?* Default: normalize. Postgres is fast enough.
+- *Use SQLModel or raw SQLAlchemy?* Default: SQLModel. The Pydantic integration is nice for FastAPI responses.
+
+**Acceptance:**
+- `SELECT * FROM player_game_logs WHERE player_id = X AND event_time < Y AND ingested_at <= Y` returns correct point-in-time results
+- The point-in-time regression test (`backend/tests/test_point_in_time.py`) passes locally and forces callers to pass `as_of` explicitly via a keyword-only argument
+- Daily job runs and adds new games without re-fetching existing
+- Three random games' box scores from the loaded data have been manually compared against basketball-reference.com and match
+- Tests pass in CI (DB-backed tests skip gracefully if Postgres isn't available; the unit-style tests still run)
+
+---
+
+## M2: Kalshi Market Data Ingestion
+
+**Status:** Done (2026-06-15). Four tables (`markets`, `market_snapshots`, `market_settlements`, `kalshi_player_aliases`) live with the same point-in-time pattern as M1. Bulk historical loader brought in 19,736 settled markets across the three series (`KXNBAPTS`, `KXNBAREB`, `KXNBAAST`). 5-min snapshot job for active markets wired into the scheduler alongside the daily NBA ingest, both gated by `SCHEDULER_ENABLED`. Four failure-mode tests cover the Kalshi source (timeout, 429, malformed JSON, missing field). Three settled markets spot-checked against kalshi.com.
+
+**Branch points hit:**
+- REST polling at 5-min cadence chosen as planned (no WebSocket, no orderbook).
+- All four price legs stored (yes_bid, yes_ask, no_bid, no_ask) per the ADR; cheap to store and avoids re-fetching to compute alternates.
+- Composite PK `(ticker, quoted_at)` on `market_snapshots`; gives idempotency and a natural btree for the snapshot-closest-to-T query.
+- No separate `kalshi_game_aliases` table; M1's `Game.game_date` joined directly via Kalshi's team abbreviations.
+- 429 retry-with-backoff added to `CachedHttpClient` after the live Kalshi public endpoint rate-limited mid-pull. Independent of the existing timeout retry path.
+- Discovered Kalshi's playoff prop coverage required loading NBA playoff and Play-In games into M1's schema. M1's `bulk_load` CLI choices extended from `["Regular Season", "Playoffs"]` to `["Regular Season", "Playoffs", "PlayIn"]`; playoffs and Play-In loaded across four seasons. Game FK resolution went from 53% to 100% over those passes.
+
+**Effort:** ~15-20 hours
+
+**Goal:** Kalshi NBA prop markets are snapshotted every 5 minutes during game days. Historical settled markets are loaded once for backtest use.
+
+**Tasks:**
+- Schema: `markets`, `market_snapshots` (bid, ask, last, volume, `quoted_at`), `market_settlements`
+- Kalshi REST API client using httpx async
+- Snapshot job that runs every 5 minutes when games are upcoming
+- Historical backfill from Kalshi's settled-markets endpoint
+- Parser that maps Kalshi's market identifiers to (player, prop_type, game) tuples in your schema
+- Tests
+
+**Considerations:**
+- Kalshi market identifiers may not be obvious. Spend time understanding their naming conventions before writing the parser.
+- The snapshot job should be cheap. 5-min cadence × ~50 players × ~3 prop types × game hours is manageable, but don't be reckless.
+- Store all four price fields (bid, ask, last, volume). Even if you only use mid-price in v1, having the full picture lets you reason about spread costs and liquidity later.
+
+**Branch points:**
+- *WebSocket for real-time or REST polling?* Default: REST polling. PRD says no real-time for v1. Stick with that.
+- *5-min cadence or different?* Default: 5 min. Tune later based on observed price movement.
+- *Should you also store the orderbook?* Default: no. Top-of-book is enough for v1.
+
+**Acceptance:**
+- Live Kalshi NBA prop markets are captured at 5-min intervals during games
+- Historical settled markets loaded for at least the 2025-26 season
+- Can query market price for player X, prop Y, at time T and get the snapshot closest to (but not after) T
+
+---
+
+## M3: Baseline Model + Skeleton Backtest Harness
+
+**Status:** In progress (2026-11-06). Baseline, `predictions` table, 16:00 UTC job, and `python -m app.backtest.run` are on branch `m3-baseline`. Design notes are in `docs/provenance/m3-baseline.md`. The "beats 50% on a held-out month" line is not claimed yet. January 2025 has no Kalshi lines (coverage starts November 2025), and bulk-loaded `ingested_at` values sit on the fetch day, so a 2025 replay that keeps the point-in-time filter will not see those rows.
+
+**Effort:** ~15-20 hours
+
+**Goal:** An end-to-end pipeline works: predictions are generated, stored with timestamps, and a backtest replays them against historical outcomes. The model itself is intentionally dumb. The point is to validate the infrastructure.
+
+**Tasks:**
+- `predictions` table schema with `prediction_time`, `model_version`, full prediction payload
+- Simple baseline model: rolling average over last 15 games, with home/away and rest-day adjustments
+- Daily prediction job that produces predictions for all upcoming games' player-props
+- Skeleton backtest harness: replay predictions day by day, compare to outcomes
+- Basic metrics: hit rate (predicted-over vs actual-over), mean absolute error
+
+**Considerations:**
+- The baseline being dumb is not a bug. Its job is to expose pipeline issues, not to make money.
+- The backtest harness designed here is the same one M4 extends. Design it for replay, not for one-shot evaluation.
+- Write the point-in-time correctness regression test now: a test that tries to make a prediction using future data and confirms it fails loudly.
+
+**Branch points:**
+- *Skip baseline, go straight to XGBoost?* Default: do not skip. The baseline catches bugs in ingestion and pipeline layers that would be much harder to debug under a complex model.
+- *Predict for all players or only Kalshi-covered ones?* Default: only Kalshi-covered players (~50). Reduces compute, matches the market scope.
+
+**Acceptance:**
+- Predictions are stored with correct point-in-time timestamps
+- `python -m app.backtest.run --start 2025-01-01 --end 2025-01-31` produces a report
+- Baseline's hit rate beats 50% on a held-out month (it should; even rolling averages are not random)
+- Point-in-time regression test passes
+
+---
+
+## M4: Backtest Harness with Calibration Metrics
+
+**Effort:** ~10-15 hours
+
+**Goal:** The backtest harness produces serious model evaluation outputs: Brier score, log loss, calibration curves, edge realization plots.
+
+**Tasks:**
+- Brier score and log loss implementations with unit tests against known values
+- Calibration plot generator (predicted probability buckets vs realized rate)
+- Edge realization analysis (predicted edge vs realized return)
+- Backtest report generator: writes markdown reports with embedded plots to `docs/results/`
+- CI smoke test: a tiny backtest (1 week, 5 players) runs on every PR and fails if calibration drifts badly
+
+**Considerations:**
+- Implement metrics with synthetic test data first. Compute Brier on a fake dataset with known properties and confirm the answer matches the hand-computed value. This is the only way to be sure the metric implementation is correct.
+- Reports are the most useful artifact of this milestone. Make them readable. A recruiter clicking through `docs/results/` should be able to understand the model's track record without running anything.
+
+**Branch points:**
+- *Build the calibration view in the dashboard now or in M8?* Default: M8. Build the data layer here, render later.
+- *How granular should calibration buckets be?* Default: 10 bins (deciles of predicted probability). Adjust if data is sparse.
+
+**Acceptance:**
+- Metrics produce correct values on synthetic test data
+- A real backtest report exists in `docs/results/` with at least one month of data
+- CI smoke test runs and passes
+
+---
+
+## M5: XGBoost Feature Predictor
+
+**Effort:** ~25-35 hours
+
+**Goal:** A feature-rich XGBoost model replaces the baseline as the primary point predictor. SHAP values are stored alongside predictions for later dashboard use.
+
+**Tasks:**
+- Feature engineering pipeline (10-20 features):
+  - Player rolling stats over multiple windows (last 5, 10, 20 games)
+  - Opponent defensive rating, pace
+  - Home/away
+  - Rest days
+  - Recent usage rate
+  - Team's recent offensive efficiency
+  - Lineup composition (basic version, will be enhanced in M7)
+  - Days since last 30+ point game (as a regression-to-mean signal)
+- Training script with `TimeSeriesSplit` cross-validation
+- Light hyperparameter tuning (random search, 30-50 iterations)
+- SHAP value computation per prediction, stored
+- Model versioning: every prediction records the model version that made it
+- Integration: replace baseline in the daily prediction job
+
+**Considerations:**
+- Feature engineering is iterative. Don't try to nail it on the first pass. Ship 10 features, see what XGBoost weights highest, then iterate.
+- `TimeSeriesSplit` is non-negotiable. Standard k-fold leaks future info.
+- SHAP can be slow on large feature sets. For v1, storing SHAP values for the top features per prediction is enough; don't compute full Shapley values for everything.
+- Compare against M3 baseline directly. If XGBoost doesn't clearly beat the baseline on out-of-sample MAE, something is wrong (check for leakage, check the baseline isn't accidentally too strong).
+
+**Branch points:**
+- *XGBoost vs LightGBM vs CatBoost?* Default: XGBoost (locked in CLAUDE.md). All three are reasonable. Switching costs a day of refactoring.
+- *Feature count: 10 vs 50 vs 100?* Default: start with 10-15, expand to 25-40 by the end of this milestone. Existing nba_ev_bot uses 100+; you can match that depth in v2 if it matters.
+- *Quantile regression for early uncertainty estimates?* Default: skip; the Bayesian wrapper in M6 handles uncertainty. Quantile regression here would be redundant.
+
+**Acceptance:**
+- XGBoost beats baseline on out-of-sample backtest (lower MAE, better calibration)
+- SHAP values stored per prediction
+- Training is reproducible from one command (`make train` or equivalent)
+- Model version is recorded with every prediction
+
+---
+
+## M6: Bayesian Wrapper (the big one)
+
+**Effort:** ~40-60 hours
+
+**Goal:** A hierarchical Bayesian model wraps XGBoost output to produce full posterior distributions per prop. Hierarchical pooling handles low-sample players. Player-level random effects capture individual variation around the XGBoost prediction.
+
+**This is the most ambitious milestone. Plan accordingly. By the time you start, you should have finished McElreath chapters 1-4.**
+
+**Sub-phases:**
+
+**Phase A: Reading & toy models (5-10 hours)**
+- McElreath chapters 1-4 if not already done
+- Build the "eight schools" hierarchical model in PyMC as a hello-world
+- Build a one-player, one-prop, one-season toy Bayesian model from scratch
+
+**Phase B: Hierarchical structure without XGBoost (8-12 hours)**
+- Player-level random effects pooled across position clusters
+- Sample with NUTS on a real subset of data
+- Posterior predictive checks
+- Diagnostics: R-hat, ESS, divergences
+
+**Phase C: Integrating XGBoost (8-12 hours)**
+- XGBoost output enters the likelihood as a covariate with a learned weight
+- Player-level deviations from the XGBoost prediction become the random effect
+- Re-run diagnostics
+
+**Phase D: Hierarchical priors over position/role clusters (8-12 hours)**
+- Pool low-sample players toward cluster means
+- Validate that rookie predictions are sensible
+
+**Phase E: Sampling pipeline & posterior storage (5-10 hours)**
+- Production sampling job that runs after each XGBoost prediction batch
+- Posterior summaries stored to the `predictions` table
+- Full traces stored as arviz NetCDF in `models/`
+
+**Phase F: Backtest comparison (5-10 hours)**
+- Backtest using posteriors vs point estimates
+- Brier score should improve (the model's confidence is now calibrated)
+- Document results in `docs/results/`
+
+**Considerations:**
+- Plan for sampler slowness. NUTS on a hierarchical model with 50 players and many parameters can take 20-60 minutes per dataset. This is fine for daily prediction (run overnight) but painful for backtesting. Cache aggressively.
+- Posterior predictive checks are the most important diagnostic. If posterior samples don't look like the observed data, something is wrong with the model or priors.
+- This is the milestone where you most need to resist letting AI write the model for you. Type the PyMC code yourself, with the book open. Future-you in interviews will thank present-you.
+
+**Branch points (critical):**
+- *NUTS too slow?* If backtests over a full season take more than a few hours, switch to ADVI (variational inference) for development cycles. Run NUTS for final reported results. Document the tradeoff in an ADR.
+- *R-hat above 1.05?* Simplify the hierarchical structure. Start with single-level random effects, only add complexity once simpler models converge.
+- *Posterior is implausibly wide?* Check prior choices. Weakly informative priors (Half-Normal, Normal with reasonable scale) are usually right; flat priors are usually wrong.
+- *XGBoost integration too strong, masking individual signal?* Down-weight the XGBoost covariate by introducing an explicit weight parameter with a prior. Let the model learn how much to trust XGBoost vs the player-level effect.
+
+**Acceptance:**
+- Posterior samples stored with each prediction
+- PPC plots look reasonable
+- Diagnostics pass: R-hat < 1.01 for key parameters, ESS > 400
+- Backtest with posteriors beats backtest with point estimates on Brier score
+- An ADR exists in `docs/decisions/` explaining the model design
+
+---
+
+## M7: Injury LLM Pipeline + Lineup-Conditional Layer
+
+**Effort:** ~25-35 hours
+
+**Goal:** Injury news flows from RSS feeds and official reports through an LLM classifier into structured prior updates. A lineup-conditional model predicts how usage and minutes redistribute when starters are out.
+
+**Tasks:**
+- Official NBA injury report ingestion (`nbainjuries` package)
+- ESPN and Bleacher Report RSS feed scrapers
+- LLM classification pipeline using Claude Haiku 4.5
+- Prompt design: structured JSON output with `player`, `claim_type`, `severity`, `expected_games_missed`, `source`, `source_reliability_prior`, `confidence`
+- Source reliability priors hard-coded for known beat reporters (refine later)
+- `injury_signals` table storing classified outputs with timestamps
+- Lineup-conditional usage redistribution model: small Bayesian model fit on historical games where starters were out
+- Integration: when injury news lands, the lineup model updates affected players' projections through their priors
+
+**Considerations:**
+- Prompt design will take 2-3 rounds. Start with a basic prompt, classify 50 real news items, look at errors, refine. Repeat.
+- The lineup-conditional model is genuinely interesting research. The simplest version: for each (player, prop) pair, fit a Bayesian regression of player's stat on "is starter X out" for each starter. Pool across players.
+- LLM calls should be batched where possible. Anthropic's batch API gives 50% cost savings.
+
+**Branch points:**
+- *Haiku vs Sonnet for severity classification?* Default: Haiku. Test 100 items. If accuracy < 85%, switch to Sonnet for harder cases (keep Haiku as the default, fall back to Sonnet on uncertainty).
+- *Drop ESPN/Bleacher Report if official reports are enough?* Default: keep both. They cover different time windows (official is 5pm day-before; news is real-time during the day).
+- *Real-time Twitter monitoring?* PRD says no. Stick with that.
+
+**Acceptance:**
+- An injury news item is classified and stored with structured fields within 5 minutes of being scraped
+- A simulated "Embiid out" event causes Maxey's projection to update meaningfully (test with synthetic data, verify the direction and magnitude)
+- LLM classification accuracy on a held-out test set is documented
+
+---
+
+## M8: Dashboard MVP
+
+**Effort:** ~25-35 hours
+
+**Goal:** Three views are live: today's edges, player detail, and calibration. Mobile-friendly. Loads quickly.
+
+**Tasks:**
+- API endpoints: `/api/edges/today`, `/api/players/{id}/detail`, `/api/calibration/summary`
+- Today's edges view: sortable table with player, prop, model probability, market price, edge, confidence indicator
+- Player detail view: posterior chart (density or histogram), top SHAP features, recent injury signals
+- Calibration view: calibration curve, Brier trend over time, edge realization plot
+- Loading states, empty states, error states
+- Responsive: works on phone
+
+**Considerations:**
+- TanStack Query for all data fetching. Stale time of 5 minutes for most views (matches the snapshot cadence).
+- Posterior density charts are the visual differentiator. Use Recharts area chart or kernel density. The chart that shows "model thinks the distribution looks like this, market line is here" is the project's signature visual. Spend extra time on it.
+- Don't over-design. A clean, functional dashboard beats a beautiful one that's late.
+
+**Branch points:**
+- *Add a "system status" page?* Default: yes, small effort. Shows ingestion freshness, job run history. Useful for debugging.
+- *Add a backtest replay view?* Default: no for v1. The `docs/results/` reports are enough.
+
+**Acceptance:**
+- Dashboard loads at production URL
+- Mobile view works
+- Three core views functional
+- Page load (FCP) under 2 seconds on a typical connection
+
+---
+
+## M9: Alerts
+
+**Effort:** ~10-15 hours
+
+**Goal:** Discord webhook notifications fire when high-confidence edges appear. Deduplicated. Volume-capped.
+
+**Tasks:**
+- Edge detection job (every 5 min during game windows)
+- Threshold config via env vars: minimum edge, minimum confidence, minimum liquidity
+- Deduplication: same (player, prop, game) doesn't alert twice within 2 hours unless the edge moves significantly
+- Discord webhook delivery with rich payload (player name, line, model probability with CI, market price, edge, dashboard link)
+- Alert logging to `alerts_sent` table for later analysis (did the alerted edges actually realize?)
+- Volume cap: hard limit on alerts per hour
+
+**Considerations:**
+- Start with conservative thresholds. Wait for the dashboard to be running and tune based on observed alert volume in your first week of live data.
+- Failure mode: if Discord webhook is down, alerts log to a "failed" table but don't crash the scheduler.
+- Alert quality > alert quantity. Five high-conviction edges per week is much better than fifty noisy ones.
+
+**Branch points:**
+- *Discord vs email vs push?* Discord is easiest, sufficient, and doesn't require user setup.
+- *Notifications panel inside the dashboard?* Default: no for v1.
+
+**Acceptance:**
+- A simulated edge triggers a real Discord notification with all required fields
+- Dedup prevents same-edge alerts within the window
+- Volume cap works
+
+---
+
+## M10: Polish & Deploy
+
+**Effort:** ~10-20 hours
+
+**Goal:** The project is portfolio-ready. README is recruiter-friendly. Docs are complete. CI is green. Demo link is live.
+
+**Tasks:**
+- README rewrite: full version with screenshots, GIF of the dashboard, demo link, architecture summary, "how to run locally" section, link to the model card and results docs
+- `docs/model_card.md`: what the model does, what it doesn't, current calibration, intended use, limitations
+- `docs/architecture.md`: system diagram, data flow, key design decisions
+- `docs/results/`: at least one polished backtest report on a full season
+- All CI green, branch protection on main
+- Final security audit: grep for secrets, scan with `trufflehog`, rotate anything suspicious
+
+**Considerations:**
+- The README is the front door. Spend real time on it. Recruiters spend 30-60 seconds on a repo's README. Make those seconds count.
+- A 60-second Loom video walking through the dashboard is high-leverage. Embed it in the README.
+- Pin the most impressive backtest result in the README's top section.
+
+**Branch points:**
+- *Add a blog post explaining the methodology?* Default: optional but strongly recommended. Even a single dev.to or personal-site post explaining the Bayesian approach is interview gold.
+- *Submit anywhere?* Show Hacker News, the SABR (sports analytics) community, the rsports-betting subreddit. Optional.
+
+**Acceptance:**
+- README has screenshots, GIF, demo link, architecture summary, model card link, results link
+- All CI green
+- No secrets in repo (audit passes)
+- Repo can be cloned and run by a stranger following the README
+
+---
+
+## After v1
+
+If you ship v1 well, the v2 roadmap items in `docs/CLAUDE.md` become the natural next set of features: pgvector for player similarity, additional prop types, game-script awareness, an LLM agent layer over the dashboard. Pick one or two; don't try all.
+
+Equally valid: stop at v1. A clean, complete v1 is more impressive than a sprawling, half-finished v2.
+
+## Working principles for this roadmap
+
+A few rules to keep this document useful as it ages:
+
+- **When a milestone drifts:** if a milestone runs 50% over its estimated effort, stop and reassess. Is the scope right? Is something off in the architecture? Do you need to descope? Don't push through silently; update the doc.
+- **When a branch point is hit:** when you actually hit one of the branch points listed in a milestone, add a one-line note to the milestone explaining what you chose and why. This becomes your decision history.
+- **When you skip a milestone:** if you skip a milestone or merge two together, edit this doc to reflect that. Don't leave stale milestones cluttering the plan.
+- **When something not on the roadmap appears:** add it. The roadmap is allowed to grow. It is not allowed to stay stale.
+
+The roadmap is a tool, not a contract. Use it.

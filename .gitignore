@@ -69,13 +69,16 @@ backtest_runs/
 # Personal notes and documents
 CLAUDE.md
 PRD.md
-Roadmap.md
-Reviewer.md
-process.md
+# Roadmap.md
+# Reviewer.md
+# process.md
 AGENTS.md
 notebook_notes.md
 
 # Notebook data files (large, downloadable)
 *.tar.xz
-adr.md
-docs/
+
+# Do not ignore docs/ as a directory. Personal planning files are named
+# above and stay untracked. Provenance notes and backtest reports under
+# docs/ are part of the project and should be committable. The blanket
+# docs/ ignore landed in c65c419 and hid those files.

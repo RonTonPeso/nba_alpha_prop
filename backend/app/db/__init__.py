@@ -10,6 +10,7 @@ from app.db.tables import (
     MarketSnapshot,
     Player,
     PlayerGameLog,
+    Prediction,
     RequestCache,
     Team,
 )
@@ -23,6 +24,7 @@ __all__ = [
     "MarketSnapshot",
     "Player",
     "PlayerGameLog",
+    "Prediction",
     "RequestCache",
     "Team",
     "get_engine",
