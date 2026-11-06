@@ -1,5 +1,7 @@
 # Architecture Decision Records
 
+ADR-1 and ADR-2 are the records on `main`. ADR-3 (Kalshi market schema) is drafted on branch `kalshi-pipe` and is not merged. The blank structure used to draft these lives in `docs/adr-template.md`.
+
 ---
 
 ## ADR-1: M1 Schema Design for Point-in-Time Correctness
@@ -12,15 +14,15 @@ ADR-1, 2026-05-17.
 
 
 We need to make sure that this project prevents data leakages and ensures honest backtests.
-We want to ensure that the the predictions made at a certain point say 
+We want to ensure that the predictions made at a certain point say 
 `as_of` were made not knowing facts that the model did not know at that point.
 Simple stuff like in autoregression, everything in the future
 was set to -1. 
 
 The schema directly addresses point-in-time correctness through directly enforcing 
 `event_time` and `ingested_at` to make sure that our backtest queries filter on both of these.
-if something was ingested today it must not appear in a backset set to yesterday.
-Enforced in quieries.py - query_player_game_logs
+if something was ingested today it must not appear in a backtest set to yesterday.
+Enforced in queries.py - query_player_game_logs
 
 Remember that the M0 gave us a backend skeleton, Postgres in docker-compose, Alembic
 scaffolding, and the four-table layout for `backend/app/` (data, models,
@@ -39,7 +41,7 @@ messing with our dev db.
 - `teams` is a single table keyed by NBA official team ID.
 - `game_results` is separate from `games` and append-only. New observed
   results add a row with a later `ingested_at` instead of overwriting.
-- `player_game_logs` uses a surrogate(CHANGE THIS WORD) primary key so future versions of
+- `player_game_logs` uses a surrogate primary key so future versions of
   the same `(player_id, game_id)` can exist at same time when corrections arrive.
 - Historical query helpers must take `as_of` as a keyword-only argument using the `*`.
 - `request_cache` lives in Postgres. Every `nba_api` call is keyed,
@@ -78,7 +80,7 @@ messing with our dev db.
 Rejected. The notebook exploration confirmed shufinskiy is raw event data
 (574k rows for one season, no `PTS`/`REB`/`AST`/`MIN`/`GAME_DATE` columns).
 Deriving box scores from events would require a substitution/minutes
-pipeline that is too complicated. Pushed back to maybe mileston 7 
+pipeline that is too complicated. Pushed back to maybe milestone 7 
 and perhaps forever. `nba_api` returns box scores directly.
 
 #### Switching the bulk source to the eoinamoore Kaggle dataset
@@ -101,68 +103,6 @@ returns a full season in one call. So the kaggle-dependency was not worth it.
 - Whether `request_cache` TTLs should be per-endpoint or global. Global
   with a sensible default should be fine for v1.
 
-
-
-
-# ADR Template
-
-## Skeleton
-
-Use this as the structure for the real ADR. Each section has a short
-prompt for what belongs there. Keep your prose terse. The reader is a
-future engineer trying to understand a decision.
-
-### Context
-
-Two or three short paragraphs. Establish:
-
-- What problem this ADR addresses (one sentence).
-- The constraint that forces a non-trivial design (one sentence). For this
-  ADR, that constraint is point-in-time correctness for backtesting.
-- Any prior state worth noting (existing tables, prior attempts, M0 work).
-
-### Decision
-
-Bulleted list. Each bullet is one design choice you made. Keep the bullets
-terse; the reasoning lives in the next two sections. Example shape:
-
-- One sentence per decision.
-- Use the present tense ("Fact tables carry...").
-- Don't justify here. Just state.
-
-### Consequences
-
-#### Positive
-
-- What this design enables. Three to six bullets.
-
-#### Negative
-
-- What this design costs. Three to six bullets. Be honest about the costs.
-  An ADR with no negative consequences reads like marketing.
-
-### Alternatives Considered
-
-This is the most important section. For each rejected alternative, write a
-short paragraph: what the alternative was, and why you rejected it. This
-is where your engineering judgment shows up. A reader skimming the ADR
-should be able to learn what you ruled out and why.
-
-Recommended alternatives to cover for this ADR:
-
-- Mutable game rows (no append-only results table).
-- Denormalized team names directly on `player_game_logs`.
-- Full event sourcing for every table.
-- Deriving `player_game_logs` from shufinskiy play-by-play.
-- Switching the bulk source to the eoinamoore Kaggle dataset.
-- `franchises` + `franchise_identities` split for temporal team identity.
-
-### Open Questions
-
-Things you have not decided yet, or intend to revisit. Be honest. The point
-of writing these down is so future-you knows what's still load-bearing on
-later decisions.
-
 ---
 
 ## ADR-2: Use `curl_cffi` to Talk to `stats.nba.com`
@@ -175,7 +115,7 @@ Accepted, 2026-05-30.
 
 When your browser visits a website, first step is **TLS handshake**. Fancy handshake where both sides agree on how to encrypt the rest of the conversation. Handshake has a "shape", the exact order of cipher suites the client offers, the extensions it lists, the curves it advertises and etc. This shape is the **TLS fingerprint**.
 
-Real browsers like Chrome and stuff have very specific fingerprints. Anti-bot companies such as Akami (which the nba utilizes) have memorized what real browser fingerprints look like. They use the fingerprint to decide whether you're a real human in a browser or a script pretending to be one.
+Real browsers like Chrome and stuff have very specific fingerprints. Anti-bot companies such as Akamai (which the nba utilizes) have memorized what real browser fingerprints look like. They use the fingerprint to decide whether you're a real human in a browser or a script pretending to be one.
 
 My mistake
 

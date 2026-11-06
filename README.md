@@ -1,72 +1,93 @@
 # NBA Player Props, Forecast Honestly
 
-**Backend health:** https://gregarious-friendship-production-b0f6.up.railway.app/health
+**Frontend placeholder:** https://nba-alpha-prop.vercel.app
 
-I built a forecasting system that pulls NBA player prop prices from Kalshi, uses a hierarchical Bayesian model wrapping an XGBoost feature predictor to produce calibrated posterior distributions over points, rebounds, and assists, and surfaces the props where the market price disagrees with the posterior.
+This repo is a forecasting system for NBA player props. The target is a hierarchical Bayesian model wrapped around a gradient-boosted feature predictor, producing a distribution over points, rebounds, and assists, then set next to Kalshi's price for the same prop. The dashboard's job is to show the disagreement and, on a separate screen, whether the probabilities have been calibrated.
 
-> This is a portfolio project, not a betting tool. No real money moves through it. The point is to demonstrate engineering and modeling judgment end-to-end.
-## What the dashboard shows
+This is a portfolio project. No real money moves through it. The point is the engineering and the modeling judgment, end to end.
 
-Three views. Plain English version below.
+**Where the code is today:** M0 and M1 are on `main`. M2 (Kalshi ingestion) is implemented on `kalshi-pipe` and is not merged. The model, the backtest, the injury parser, and the three dashboard views are not built. `docs/status.md` is the detailed map. The paragraphs below describe the product being built.
 
-**Today's edges.** A ranked list of player prop bets where my model and the market disagree the most, with a confidence indicator next to each one. Sorted so the most interesting ones are on top.
+The old Railway health URL (`gregarious-friendship-production-b0f6.up.railway.app`) returned "Application not found" when checked on 6 Nov 2026. The service is not up. `railway.json` is still the deploy config for whenever it comes back.
 
-**Player drill-down.** Click a player, see a chart of the model's full belief about how they'll perform tonight: not a single number, but a probability spread. You can see where the market's line falls on that spread.
+## What the dashboard is for
 
-**Calibration.** The most honest view in the app. It tracks how the model has actually performed over time. When I said something would happen 70% of the time, does it actually happen 70% of the time? If not, by how much am I off? Most prediction systems hide this.
+Three views.
 
+**Today's slate.** A ranked list of player props where the model and the market disagree, with a confidence indicator, most interesting first.
 
-## Why I built it
+**Player drill-down.** One player, one chart of the model's full belief about tonight: a probability spread, with the market's line marked on it.
 
-The honest answer to "why NBA props" is that I can train a model on real data, compare it to a real market price every day, and find out within hours whether my prediction was right. 
+**Calibration.** When the model said 70%, how often it happened. This is the view the project is willing to be judged on.
 
-## How the forecasting works (intuition, no math)
+## How the forecast is designed
 
-There are two layers stacked on top of each other.
+Two layers.
 
-The first layer is a **gradient-boosted tree model**. It takes everything I know about a player and tonight's game (rolling averages over different windows, the opponent's defense, pace, home or away, rest days, recent usage, who else is on the floor) and produces a number. That number is the model's best single-point guess at how many points the player will score.
+The first is a gradient-boosted tree. It takes what is known about the player and the game before tip (rolling averages, opponent defense, pace, home or away, rest, recent usage, who else is on the floor) and produces a point estimate for the stat.
 
-The second layer is a **hierarchical Bayesian model**. This layer does a lot for calibration. Three things it does that the tree alone cant:
+The second is a hierarchical Bayesian model around that estimate. It does three things the tree does not:
 
-1. **It produces a distribution, not a number.** Instead of "I think LeBron will score 28," it says "I think LeBron will score somewhere in this range, with this shape." That's what lets me compare to a market price honestly. Markets price probabilities, not point estimates.
-2. **It borrows strength across similar players.** A rookie with five games of data doesn't get an overfit projection. The model pools information from other players who fit the same profile.
-3. **It updates cleanly when news lands.** When a star is ruled out, usage and minutes redistribute among teammates in specific ways. The Bayesian layer treats this as a prior update. Tree-based models would have to retrain from scratch.
+1. It produces a distribution, so a market price can be compared to a probability.
+2. It pools players with a similar profile, so a rookie with a handful of games does not get an overfit projection.
+3. It can take a news update as a change to the prior. A starter ruled out moves teammates' minutes and usage without a full retrain.
 
-Together: the trees do the feature-rich heavy lifting, the Bayesian layer wraps it in calibrated uncertainty.
+The tree does the feature work. The Bayesian layer carries the uncertainty. Neither layer is in the code yet. `backend/app/models/` is empty, and `pyproject.toml` does not depend on XGBoost, PyMC, or ArviZ.
 
-## Where the injury news comes in
+## Where injury news fits
 
-I run an LLM (Claude Haiku) over official NBA injury reports and breaking news from ESPN and Bleacher Report. The LLM doesn't predict anything. Its job is small and bounded: read a news item and extract structured fields. Player name. Injury severity. Expected games missed. Source reliability. Confidence.
+The design uses Claude Haiku on official NBA injury reports and on ESPN and Bleacher Report items. The model call extracts fields: player, severity, expected games missed, source, confidence. Those fields are prior updates. There is no injury module yet. The `anthropic` dependency is declared and unused.
 
-Those structured fields flow into the model as prior updates on the affected players. So when news breaks that a starter is out, the model's projections for his teammates shift in the right direction within minutes, not the next day.
+## Stack
 
-## Under the hood car emoji later
+- **Backend:** Python, FastAPI, PostgreSQL, SQLModel, Alembic. These are in the repo and tested.
+- **Data in the repo:** `stats.nba.com` box scores through `LeagueGameLog`, cached in Postgres, fetched with `curl_cffi` so Akamai accepts the TLS handshake. Kalshi's public market API is coded on `kalshi-pipe`.
+- **Modeling, still ahead:** XGBoost, PyMC, ArviZ.
+- **Frontend:** Next.js 16, TypeScript, Tailwind, TanStack Query. Recharts is the chart library to add with the first real view.
+- **Scheduling:** APScheduler inside the FastAPI process. The daily NBA job exists. It runs only when `SCHEDULER_ENABLED=true`.
+- **Deploy target:** Railway for the API and Postgres, Vercel for the frontend, GitHub Actions for lint, types, and tests.
 
-- **Backend:** Python, FastAPI, PostgreSQL, SQLModel, Alembic migrations.
-- **Modeling:** XGBoost (point predictor), PyMC (Bayesian wrapper), arviz (posterior analysis).
-- **Frontend:** Next.js 14, TypeScript, Tailwind, TanStack Query, Recharts.
-- **Data sources:** stats.nba.com (box scores), Kalshi public API (prop markets), nbainjuries package + ESPN/Bleacher Report RSS (injuries).
-- **LLM:** Anthropic Claude Haiku for injury classification, structured JSON output.
-- **Scheduling:** APScheduler running inside the FastAPI process.
-- **Deployment:** Railway for the backend and Postgres, Vercel for the frontend, GitHub Actions for CI.
+Hosting stays on free public data. No paid stats feed.
 
-Total monthly hosting cost stays under $25. No paid data feeds.
+## What is running
 
-## What this is not
+From `backend/`, with Postgres up and `DATABASE_URL` set (see `.env.example`):
 
-- Not a betting tool. No real trades. No execution.
-- Not a "beat the market" system. The Kalshi market is competitive. The goal is to be calibrated and honest, not to claim alpha.
-- Not feature-complete. Three prop types, fifty-ish players, NBA only. Expanding scope is a v2 conversation.
-- Not a finished research result. It's a working pipeline with documented calibration. That's the artifact.
+```bash
+uv sync
+uv run alembic upgrade head
+uv run pytest
+uv run python -m app.data.bulk_load --start 2024-25 --end 2024-25
+uv run python -m app.data.spot_check --n 3
+uv run uvicorn app.main:app --reload
+```
+
+`GET /health` returns `{"status":"ok"}`. The bulk loader and the spot check need a migrated database. Tests that need Postgres skip when it is down, so a green run without Postgres has not exercised the database.
+
+Frontend:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
 
 ## Repo layout
 
-```
-backend/      FastAPI app, data ingestion, model code, backtests
-frontend/     Next.js dashboard
+```text
+backend/      FastAPI app, NBA ingestion, and the empty model, backtest, alerts, and api packages
+frontend/     Next.js app, currently a placeholder page
 db/           Alembic migrations
-docs/         Architecture decisions, results, model card
+docs/         ADRs, status, and the plan for the next build session
+notebooks/    One shufinskiy exploration notebook
 ```
+
+## Scope boundaries
+
+- No order entry and no real trades.
+- The Kalshi market is the comparison point. The project keeps score on calibration.
+- Three prop types, on the order of fifty players, NBA only, until a later version says otherwise.
+- The artifact to aim at is a working pipeline plus a calibration report.
 
 ## License
 

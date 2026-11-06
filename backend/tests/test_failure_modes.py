@@ -1,6 +1,6 @@
 """The four ingestion failure modes per M1 acceptance criteria.
 
-Each test maps to one criterion from docs/Roadmap.md M1:
+Each test maps to one M1 acceptance criterion:
 
 1. **Timeout** — cache propagates ``curl_cffi`` ``Timeout``, does NOT
    write a row. Caller decides on retry policy.
