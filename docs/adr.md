@@ -159,3 +159,200 @@ Akamai's fingerprint check passes. The response comes back. Everything works.
 - Will Chrome's TLS fingerprint shift enough in the next year to require bumping the `impersonate=` profile?
 
 ---
+
+## ADR-3: M2 Schema for Kalshi Market Data
+
+### Status
+
+Drafted 2026-05-31. Ronnie to rewrite in his voice.
+
+### Context
+
+M2 brings Kalshi NBA prop market data into Postgres. We need live snapshots
+every 5 minutes for active markets and a one-time backfill of settled
+markets from Nov 2025 (when Kalshi added NBA prop coverage) onward.
+
+Two design constraints shape the schema:
+
+1. **Point-in-time correctness still applies.** A backtest asking "what was
+   the price on player X, prop Y at time T" must return the latest snapshot
+   with `quoted_at <= T` and `ingested_at <= T`. Same pattern as M1's fact
+   tables.
+2. **Kalshi's market identity is the non-mechanical work.** Each Kalshi
+   market is a binary Yes/No at one strike (not an over/under with two
+   sides). A single game and player produces multiple market tickers, one
+   per line. The market ticker `KXNBAPTS-26MAY30SASOKC-SASVWEMBANYAMA1-35`
+   needs to map to `(player_id, game_id, prop_type, line)` in M1's schema.
+
+We probed the public REST API
+(`https://api.elections.kalshi.com/trade-api/v2/markets`) to confirm the
+ticker format, the price fields, and that `?status=settled` returns the
+finalized historical markets we need for backtest.
+
+### Decision
+
+**Three new tables plus one alias table.**
+
+- `markets` — identity row per Kalshi ticker. PK is `ticker` (string).
+  Holds the immutable market identity (series, event_ticker, prop_type,
+  line, strike_type, open_time, close_time, rules_primary text) plus
+  resolved FKs (`player_id` → `players`, `game_id` → `games`, both nullable
+  until alias resolution succeeds). Carries `created_at` and `ingested_at`.
+  Stores `raw_data` JSONB so we can re-resolve if the alias table grows.
+
+- `market_snapshots` — fact table. **Composite PK `(ticker, quoted_at)`.**
+  Holds `yes_bid`, `yes_ask`, `no_bid`, `no_ask`, `last_price`, `volume`,
+  `open_interest`, `liquidity` as floats. `quoted_at` is the `event_time`
+  analog from M1 (the moment the price was true). Carries `ingested_at`.
+  `raw_data` JSONB for the full Kalshi market object at snapshot time.
+  Index on `(ticker, quoted_at DESC)` for the "latest snapshot at or
+  before T" query pattern.
+
+- `market_settlements` — fact table. PK is `ticker` (one settlement per
+  market). Holds `result` ("yes" | "no"), `settlement_value` in dollars,
+  `settled_at`, `ingested_at`, `raw_data`.
+
+- `kalshi_player_aliases` — mapping table. PK is `kalshi_player_name`
+  (the English name extracted from `rules_primary`, e.g. "Victor
+  Wembanyama"). Column `player_id` FK → `players.player_id`. Carries
+  `created_at`. Seeded semi-manually for the ~50 Kalshi-covered players.
+
+**No `kalshi_game_aliases` table.** Game resolution joins directly against
+M1's `games` table on `game_date` + home/away team abbreviations. The
+Kalshi event_ticker (`KXNBAPTS-26MAY30SASOKC`) decomposes cleanly to
+`(2026-05-30, SAS away, OKC home)` and M1's `Game.game_date` (already a
+`date` column) makes this a clean equality join through the `teams` table.
+
+**One Kalshi market = one row in `markets`.** A Wembanyama "30+ points"
+market and "35+ points" market for the same game are two distinct tickers
+and two distinct rows, distinguished by the `line` column. The Yes side
+is "scores ≥ line"; No is "scores < line".
+
+**All four price legs stored on snapshots.** `yes_bid`, `yes_ask`,
+`no_bid`, `no_ask`. Not redundant on a binary market: `yes_ask + no_ask`
+should sum near 1.00 in liquid markets but bid sides won't. Storing all
+four costs little and lets us reason about spread/liquidity later.
+
+**Snapshot job gating: simplest version.** Every 5 minutes, fetch all
+`markets` with `close_time > now`. No filtering by NBA game windows. If
+there are no active markets the snapshot pass is a single empty fetch.
+
+**Alias resolution at ingest time.** When a market is first seen, parse
+`rules_primary` for the player name, look up `kalshi_player_aliases`,
+parse the event_ticker for `(date, away, home)`, look up the M1 `games`
+row, populate `markets.player_id` and `markets.game_id`. Unresolved
+markets get stored with NULL FKs and counted as `aliases_unmapped` in
+the load summary. A later pass can re-resolve unmapped markets when the
+alias table grows.
+
+**Same reusable infrastructure.** `CachedHttpClient`, `FakeSession`,
+`load_season`-shape orchestration with date-window args, per-batch
+`session.flush()` + caller `commit()`, APScheduler `AsyncIOScheduler`
+gated by `SCHEDULER_ENABLED`. No per-source HTTP client switching.
+
+### Consequences
+
+#### Positive
+
+- Backtests against Kalshi work with the same `as_of` filter pattern as
+  M1: `SELECT ... FROM market_snapshots WHERE ticker = ? AND quoted_at <= ?
+  AND ingested_at <= ? ORDER BY quoted_at DESC LIMIT 1`.
+- Multiple strikes per (player, game) fall out for free. Whichever line
+  the model wants to evaluate against has its own row of snapshots.
+- Alias-resolution failures are recoverable. Raw Kalshi text is preserved
+  in `markets.raw_data` and the source columns; growing the alias table
+  later re-resolves stale rows.
+- The snapshot composite PK gives idempotency for free. Re-running the
+  snapshot job within the same 5-min window inserts zero new rows because
+  `(ticker, quoted_at)` already exists.
+- Three tables matches M1's separation: identity (`markets`) plus
+  facts (`market_snapshots`, `market_settlements`). Familiar pattern.
+
+#### Negative
+
+- The alias table is manual seeding work. ~50 players is small but real;
+  the first run will surface unmapped names that need adding by hand.
+- Storing all four bid/ask legs plus volume + OI + liquidity per snapshot
+  is fatter than necessary for v1's edge computation. Disk cost is small.
+- `markets` rows are mutable for `close_time` (Kalshi shifts it on early
+  close) and `player_id`/`game_id` (resolved later). Not append-only.
+  Trade-off: simpler queries, but updates require us to be careful that
+  raw_data is updated whenever close_time changes.
+- Game resolution depends on Kalshi's `event_ticker` date/abbreviations
+  matching NBA's `LeagueGameLog`. Robust for clean cases, fragile for
+  rare cases (rescheduled games, neutral-site games, abbreviation
+  drift). Documented as an open question.
+
+### Alternatives Considered
+
+#### Single "over/under at line L" market row with both sides
+
+Rejected. Kalshi serves each strike as its own binary market with its own
+ticker, open/close times, and price legs. Forcing a two-sided abstraction
+on top would lose information (yes_ask + no_ask doesn't always equal 1.00
+mid-trade) and would require us to invent a pairing rule that Kalshi
+itself doesn't expose.
+
+#### Separate `kalshi_game_aliases` mapping table
+
+Considered and rejected. M1's `games` table already carries the canonical
+game identity keyed by NBA `game_id`, with `event_time` and the team FKs.
+The Kalshi event_ticker `26MAY30SASOKC` decodes deterministically to
+`(2026-05-30, SAS, OKC)`, which joins directly against `games` through
+the `teams` table by abbreviation. A separate alias table would duplicate
+information that M1 already has.
+
+#### Mid-price-only snapshots
+
+Considered (would halve the snapshot rows' price columns) and rejected.
+Spread and liquidity are signal we want to study later, and the four-leg
+storage cost is trivial.
+
+#### Snapshot job gated by NBA game windows
+
+Considered (only poll within ±3h of an actual game tipoff). Rejected for
+v1 in favor of "poll any market with `close_time > now`." The tighter
+gating is a v1.1 optimization once we observe actual call volume.
+
+#### Store snapshots in a single wide row keyed by `ticker` with
+arrays / JSONB time series
+
+Rejected. Querying "snapshot at or before T" against a JSON array
+requires unnesting and is unfriendly to the backtest query path. A
+flat `market_snapshots` row per `(ticker, quoted_at)` is the natural
+shape and the index on `quoted_at DESC` makes the lookup cheap.
+
+#### Append-only `markets` (no in-place updates)
+
+Considered, given M1's append-only `game_results`. Rejected because
+markets carry resolved FKs that we want to backfill *after* the row
+exists, and `close_time` legitimately shifts when Kalshi triggers an
+early close. Treating `markets` as identity-like (PK = ticker, row
+updates on re-observation) keeps queries simple. `raw_data` JSONB
+preserves the historical view if we need it.
+
+### Open Questions
+
+- **Mid-price vs last-trade for edge computation.** `((yes_bid + yes_ask)
+  / 2)` is the natural market-implied probability; `last_price_dollars`
+  is the most recent trade. v1 stores both; the modeling pipeline picks
+  one in M3.
+- **Player disambiguation when the ticker carries a suffix digit** (e.g.
+  `SASVWEMBANYAMA1`). The `1` suffix appears unused in our sampled data
+  but presumably handles same-name same-team collisions. Watch for it
+  in real coverage; the alias table is keyed on the English name from
+  `rules_primary`, which sidesteps the suffix.
+- **Historical snapshots before our system started polling.** Kalshi's
+  REST exposes settled markets and their final state but not the price
+  history. The backfill captures settlements; live snapshots only exist
+  going forward.
+- **Rescheduled or neutral-site games.** Kalshi's event_ticker date may
+  not match NBA's `GAME_DATE` if a game is postponed. Probably rare
+  enough to handle as alias-resolution failures (NULL FKs) and patch
+  manually.
+- **Multi-leg props (PRA, PR, RA, threes, etc.).** Out of scope v1 per
+  PRD §9, but their series tickers (`KXNBAPRA`, `KXNBAPR`, `KXNBARA`,
+  `KXNBA3PT`) exist and would slot into this schema by adding a
+  `prop_type` value. The schema doesn't preclude them.
+
+---

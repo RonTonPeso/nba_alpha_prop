@@ -296,7 +296,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--season-type",
         default="Regular Season",
-        choices=["Regular Season", "Playoffs"],
+        choices=["Regular Season", "Playoffs", "PlayIn"],
     )
     args = parser.parse_args(argv)
 
