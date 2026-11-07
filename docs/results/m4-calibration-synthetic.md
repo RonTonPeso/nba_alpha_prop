@@ -15,16 +15,19 @@ to a replay set before that fetch.
 Games in range: 7
 Kalshi-resolved players in the database: 5
 Forecasts scored: 35
-Abstained (fewer than 5 prior games): 0
+No row visible at 16:00 UTC: 0 player-props. These players may have history. It was ingested after the clock.
+Visible history shorter than 5 games: 0 player-props.
 Skipped (prior team not in this game): 0
 MAE: 2.000 on 35 player-props
-Hit rate: 35/35 = 1.000. Over means predicted mean >= line and actual stat >= line.
+Hit rate: 35/35 = 1.000. A hit is agreement. The mean and the stat are both >= the line, or both below it.
+Predicted over (mean >= line): 0 trials.
+Predicted under (mean < line): 35/35 = 1.000.
+Games with a scored contract: not attached. This block is a typed fixture.
 
-MAE counts each player-prop once.
+MAE counts each player-prop with a forecast, including games with no line.
 Hit rate counts each distinct Kalshi line once.
 Brier and log loss count each Kalshi contract once.
 All three are conditional on the player appearing in the box score.
-A handful of games is a sample. The held-out month is a separate check.
 
 Brier score: 0.062500 on 35 contracts. Mean squared error of P(stat >= line) against the 0/1 outcome.
 Log loss: 0.287682 on 35 contracts. Probabilities are clipped to [1e-06, 0.999999] before the logarithm. Brier uses the unclipped probability.

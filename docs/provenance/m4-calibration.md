@@ -65,7 +65,7 @@ Rejected: a `backtest_runs` table. The PRD lists one. The milestone's artifact i
 
 ### Each contract is one probability trial. Hit rate is unchanged.
 
-Hit rate still counts each distinct line once, as M3 defined it. Brier and log loss count each ticker once, because each ticker has its own line and its own book. Five strikes on one player are five contracts. The report says so. MAE still counts the player-prop once.
+Hit rate counts each distinct line once. A hit is agreement, and the report prints predicted-over and predicted-under next to the combined rate. Brier and log loss count each ticker once, because each ticker has its own line and its own book. Five strikes on one player are five contracts. MAE counts the player-prop once, including games that had no line.
 
 ### The CI smoke test does not fail on a bad curve.
 
@@ -79,25 +79,51 @@ A real five-player week would move around by sampling noise, and GitHub Actions 
 
 Acceptance asks for a report over a real month. The command is the same replay. If the month's box scores were ingested after the 16:00 UTC clock on those game dates, the probability section says it was not scored. That report is the result. It is not replaced with a synthetic curve wearing the month's dates.
 
-## What the local database did on 6 Nov 2026
+## What the local database did on 6 Nov 2026, corrected 7 Nov 2026
 
-Two replays, both committed by the command (same version skips if the row is already there).
+A second read of the same rows, after an outside review, changed what these reports are allowed to say. The arithmetic was rechecked. The sample description was wrong.
 
-`python -m app.backtest.run --start 2025-11-01 --end 2025-11-30` is the real month. 219 games, 5,157 abstentions, 0 forecasts. Kalshi coverage exists in that month. Box scores for it were bulk-loaded in May and June 2026, so the 16:00 UTC clock cannot see them. The report is the empty-probability case: `docs/results/m4-calibration-2025-11-01-2025-11-30.md`.
+`python -m app.backtest.run --start 2025-11-01 --end 2025-11-30` is 219 games, 5,157 player-props with no visible row at 16:00 UTC, and 0 forecasts. This database has no market with `kalshi_event_date` or `close_time` in November 2025. The earliest of both is 25 March 2026. The empty probability section is the box-score clock. It is not a missing order book, and loading the history earlier would still leave the month with nothing to score. Report: `docs/results/m4-calibration-2025-11-01-2025-11-30.md`.
 
-`python -m app.backtest.run --start 2026-06-03 --end 2026-06-13` is five Finals games, the first dates whose 16:00 UTC clock sits after the 31 May 2026 bulk load. 78,602 player-game rows are visible at 1 Jun 2026 16:00 UTC. Playoff rows loaded on 15 Jun 2026 are still hidden, so the 15-game window for those Finals is the history that had already been ingested, which is mostly the regular season.
+`python -m app.backtest.run --start 2026-06-03 --end 2026-06-13` covers five Finals games and 168 forecasts. The probability section is one of them: `0042500401`, 3 June, 105 contracts. The other four games contribute MAE and no lines. The 2025-26 regular season was ingested on 5 June at 21:13 UTC, so the 3 June and 5 June clocks see the 2024-25 regular season ingested on 31 May. Stored `rest_days` on 3 June run from 416 to 476. Playoff logs were ingested on 15 June, so none of the five games sees them. Games on 8, 10, and 13 June can see the 2025-26 regular season, and their gaps are 57 to 65 days. That history is not in the Brier sample.
 
-That run scored 168 forecasts, MAE 3.548 on 168 player-props, hit rate 73/105 = 0.695, Brier 0.177592 on 105 contracts, log loss 0.522516, calibration error 0.124035. `market_snapshots` has 0 rows, so the disagreement count is empty. A constant probability of 0.5 would have Brier 0.25 on any outcomes; 0.178 is lower than that on these 105 contracts. The 0.7 to 0.8 bin predicted 0.763 and realized 0.462, and the 0.9 to 1.0 bin predicted 0.950 and realized 0.824. The placeholder normal is over-confident in the upper bins on this sample. Five games do not close the M3 "beats 50% on a held-out month" line, and none of these numbers is a claim of an edge.
+On the 105 contracts the agreement rate is 73/105 = 0.695. Predicted over is 29/52. Predicted under is 44/53. Forty-four of the 73 hits are under/under. Brier is 0.177592, log loss 0.522516, calibration error 0.124035. `market_snapshots` has 0 rows. These numbers are one night, forecast from a window that ended about fourteen months earlier. They do not close the M3 month line, and they are not a result against the market.
+
+The `ingested_at` filter stayed. A separate availability clock for bulk history is an open schema decision. It was not made here.
+
+## What changed after the 7 Nov 2026 review
+
+An outside review of the reports and the local database. The numbers above are the recheck. This list is the delta: what the review required, what the code and the docs did, and what was left.
+
+Changed:
+
+- The hit-rate sentence. The review showed the printed line described only over/over, while the code counts agreement, and 44 of the 73 hits were under/under. The report now says agreement, and it prints predicted over 29/52 and predicted under 44/53. `agreement` in `baseline.py` is the split. `test_over_hit_rate_treats_the_line_as_greater_or_equal` locks an over hit and an under miss as different counts. The synthetic report's 35/35 is entirely predicted under.
+- The sample. The review showed all 105 contracts are game `0042500401` on 3 June, and the other four Finals games add MAE only. The report now prints `Games with a scored contract: 1 (2026-06-03)` and the gap from the newest visible game, 416 to 476 days. The provenance sentence "mostly the regular season" is withdrawn. So is the comparison of Brier 0.178 to a constant 0.5, which treated one stale night as a result.
+- The abstention label. The review showed November's 5,157 were players with history the clock could not see, counted as "fewer than 5 prior games." `WriteSummary` now separates `no_visible_history` from `short_history`. The November report says 5,157 invisible and 0 short. The June file's 6 former abstentions are the same invisible bucket, not short careers.
+- The empty-month cause. The review showed this database has no November 2025 market. The earliest `kalshi_event_date` and `close_time` are 25 March 2026. The probability section no longer cites ADR-3 when nothing was scored. `test_empty_forecast_report_does_not_call_november_too_early` rejects an ADR-3 sentence in that case. The M3 provenance line that said coverage starts in November 2025 now records the loaded date.
+
+Left, with a reason:
+
+- `ingested_at` was not rewritten, and no `available_at` column was added. The review's options are a schema decision. The filter staying on is what made the one-game sample visible.
+- CI still has no Postgres. The review's mutation list stands: dropping a SQL filter stays green in Actions. A seeded database job was not added in this pass.
+- A stored `yes_bid_dollars` of `0.0000` is still a mid. Eight of the 108 markets that night have that shape, and the test still uses `None`. `market_snapshots` is empty, so no scored number moved. Confirm the zero against Kalshi's docs before the poller restarts.
+- The 31 May price inside `markets.raw_data` was not used as the market. The review also computed a Brier of 0.140 from it. That row is not a quote at 16:00 UTC on 3 June.
+- The daily job still needs a `Game` row, and those rows are written from post-game logs. The review flagged that the live path may have nothing to score before tip. It was not changed here.
+- `updated_time` as `quoted_at` was not changed. The review's stale-timestamp finding rests on one fetch.
+
+A later review of this milestone has to add to this list. A corrected number with no line saying what the review changed is not the record.
 
 ## What I would not defend
 
-- The normal tail as a basketball probability. It will be over-confident in the tails for a skewed counting stat. It exists so Brier has an input that matches the row M3 stored. If the reliability diagram, once a month is actually visible, piles every contract into one bin, the plot has done its job and the normal should be retired in M6, not patched with another coefficient.
+- The normal tail as a basketball probability. On the one scored night the upper bins realized below the predicted rate, and the history behind that night ended in the previous season. The diagram cannot separate a bad normal from a stale window or from one game. It exists so Brier has an input that matches the row M3 stored. M6 replaces the distribution. Another coefficient would not identify which of those three it was.
+- Calling 73/105 a five-game hit rate. The report now names the one contract date and splits over from under. The first version of the June file did not.
 - Scoring every strike as its own trial. A player with eight point lines moves Brier more than a player with one. That matches "each contract is a forecast of a binary," and it does not match "each player-game is one forecast." MAE still treats the player-prop once. If a later comparison needs one trial per player-prop, the closest strike is the wrong choice (it uses the prediction to pick the line). A predeclared strike, such as the line nearest 0.5 in the market, would be a separate decision.
 - Leaving the PRD's 5 percentage point calibration budget as a printed number. An interviewer can ask for the gate. The answer is that the budget is for the model that has a posterior. Applying it to this baseline, on a month the clock cannot see, would be a green check with no content.
 
 ## Tests that lock the choices
 
-- `test_calibration.py`: normal tail at 0 and at z = 1, Brier of three pairs, log loss of two pairs, clip at 1e-6, equal-width bins and a 0.05 error, probability 1 in the last bin, disagreement skipping ties and missing quotes, yes mid rejecting a one-sided or crossed book, SVG contains a circle, synthetic week Brier is 0.062500 and its calibration error of 0.25 does not fail the test.
+- `test_calibration.py`: normal tail at 0 and at z = 1, Brier of three pairs, log loss of two pairs, clip at 1e-6, equal-width bins and a 0.05 error, probability 1 in the last bin, disagreement skipping ties and missing quotes, yes mid rejecting a one-sided or crossed book, SVG contains a circle, synthetic week Brier is 0.062500 and its calibration error of 0.25 does not fail the test. The synthetic report's hit rate is predicted under, 35/35, and the empty-forecast report does not cite ADR-3.
+- `test_baseline.py`: the agreement split keeps an over/over hit and an under/over miss in different counters.
 - `test_calibration_db.py`: a quote ingested after the clock is hidden; a quote after the clock is hidden; the later visible mid wins and `last_price` is ignored; a missing ask is not a mid.
 - `test_baseline_db.py`: the existing one-line replay now also records one probability trial, outcome over, no quote, probability below one half. Mean 20 against a line of 22.5.
 

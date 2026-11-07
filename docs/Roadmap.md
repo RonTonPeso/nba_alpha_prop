@@ -178,7 +178,7 @@ There are no features yet. That is the point. Getting deployment unblocked early
 
 ## M3: Baseline Model + Skeleton Backtest Harness
 
-**Status:** Merged (PR #3, 2026-11-06). Baseline, `predictions` table, 16:00 UTC job, and `python -m app.backtest.run` are on main. Design notes are in `docs/provenance/m3-baseline.md`. Hit rate above 50% on a held-out month is still not claimed. January 2025 has no Kalshi lines (coverage starts November 2025), and bulk-loaded `ingested_at` values sit on the fetch day, so a 2025 replay that keeps the point-in-time filter will not see those rows.
+**Status:** Merged (PR #3, 2026-11-06). Baseline, `predictions` table, 16:00 UTC job, and `python -m app.backtest.run` are on main. Design notes are in `docs/provenance/m3-baseline.md`. Hit rate above 50% on a held-out month is still not claimed. The markets loaded in this database begin on 2026-03-25, and bulk-loaded `ingested_at` values sit on the fetch day, so a 2025 replay that keeps the point-in-time filter will not see those rows.
 
 **Effort:** ~15-20 hours
 

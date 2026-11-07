@@ -10,10 +10,10 @@ only when its ``ingested_at`` is at or before that clock. A January 2025
 replay against rows ingested in 2026 will abstain. That is the leak
 guard working. The report says so instead of dropping the filter.
 
-Hit rate needs a Kalshi line on that player, game, and prop. Kalshi's
-NBA props start in November 2025, so a January 2025 window can still
-produce MAE and will usually have no lines. The report does not invent
-a 50% hit rate for that case.
+Hit rate needs a Kalshi line on that player, game, and prop. In this
+database the loaded markets begin on 2026-03-25, so an earlier window
+can still produce MAE and has no lines. The report does not invent a
+hit rate for that case.
 
 Each contract is also scored as a probability. P(stat >= line) is the
 upper tail of the stored normal. Brier, log loss, and the reliability
@@ -43,7 +43,7 @@ from app.backtest.plots import reliability_svg
 from app.backtest.quotes import latest_yes_mid
 from app.db.engine import get_engine
 from app.db.tables import Game, Market
-from app.models.baseline import MODEL_VERSION, mean_absolute_error, over_hit_rate
+from app.models.baseline import MODEL_VERSION, agreement, mean_absolute_error
 from app.models.predict import (
     covered_player_ids,
     latest_logs_for_game,
@@ -64,10 +64,14 @@ class ReplaySummary:
     games_seen: int = 0
     forecasts: int = 0
     abstained: int = 0
+    no_visible_history: int = 0
+    short_history: int = 0
     skipped_team: int = 0
     mae_pairs: list[tuple[float, float]] = field(default_factory=list)
     hit_trials: list[tuple[float, float, float]] = field(default_factory=list)
     prob_trials: list[ProbTrial] = field(default_factory=list)
+    contract_dates: set[date] = field(default_factory=set)
+    history_gaps: list[int] = field(default_factory=list)
     covered_players: int = 0
     banner: str | None = None
 
@@ -77,7 +81,10 @@ class ReplaySummary:
 
     @property
     def hits(self) -> tuple[int, int] | None:
-        return over_hit_rate(self.hit_trials)
+        result = agreement(self.hit_trials)
+        if result is None:
+            return None
+        return result.hits, result.trials
 
 
 def _actual(log_points: float, log_rebounds: float, log_assists: float, prop_type: str) -> float:
@@ -114,6 +121,8 @@ def replay(
                 continue
             forecasts, part = predict_player_game(session, player_id=player_id, game=game)
             summary.abstained += part.abstained
+            summary.no_visible_history += part.no_visible_history
+            summary.short_history += part.short_history
             summary.skipped_team += part.skipped_team
             summary.forecasts += len(forecasts)
             for forecast in forecasts:
@@ -139,6 +148,10 @@ def replay(
                         Market.prop_type == forecast.prop_type,
                     )
                 ).all()
+                if markets:
+                    summary.contract_dates.add(game.game_date)
+                    if forecast.rest_days is not None:
+                        summary.history_gaps.append(forecast.rest_days)
                 for market in markets:
                     outcome = 1 if actual >= market.line else 0
                     summary.prob_trials.append(
@@ -155,28 +168,52 @@ def replay(
     return summary
 
 
+def _side_line(label: str, hits: int, trials: int) -> str:
+    if trials == 0:
+        return f"{label}: 0 trials."
+    return f"{label}: {hits}/{trials} = {hits / trials:.3f}."
+
+
+def _sample_lines(summary: ReplaySummary) -> list[str]:
+    if summary.prob_trials and not summary.contract_dates:
+        return [
+            "Games with a scored contract: not attached. This block is a typed fixture.",
+        ]
+    if not summary.contract_dates:
+        return ["Games with a scored contract: 0."]
+    dates = ", ".join(item.isoformat() for item in sorted(summary.contract_dates))
+    lines = [f"Games with a scored contract: {len(summary.contract_dates)} ({dates})."]
+    if summary.history_gaps:
+        lines.append(
+            "Days from the newest visible game to the game being scored, "
+            f"on player-props that had a line: {min(summary.history_gaps)} "
+            f"to {max(summary.history_gaps)}."
+        )
+    return lines
+
+
 def render_report(summary: ReplaySummary, *, chart_name: str) -> tuple[str, str | None]:
     mae = summary.mae
-    hits = summary.hits
     if mae is None:
         mae_line = "MAE: not scored (no forecasts with a box score)"
     else:
         mae_line = f"MAE: {mae:.3f} on {len(summary.mae_pairs)} player-props"
-    if hits is None and summary.forecasts == 0:
-        hit_line = "Hit rate: not scored. No forecast was produced, so no line was compared."
-    elif hits is None:
-        hit_line = (
-            "Hit rate: not scored. Forecasts were produced and no Kalshi line "
-            "was joined for this window. NBA prop coverage on Kalshi starts "
-            "November 2025, so an earlier month has nothing to grade as over."
-        )
+    scored = agreement(summary.hit_trials)
+    if scored is None and summary.forecasts == 0:
+        hit_lines = ["Hit rate: not scored. No forecast was produced, so no line was compared."]
+    elif scored is None:
+        hit_lines = ["Hit rate: not scored. Forecasts were produced and no Kalshi line was joined."]
     else:
-        hit_count, trials = hits
-        rate = hit_count / trials
-        hit_line = (
-            f"Hit rate: {hit_count}/{trials} = {rate:.3f}. "
-            "Over means predicted mean >= line and actual stat >= line."
-        )
+        rate = scored.hits / scored.trials
+        hit_lines = [
+            (
+                f"Hit rate: {scored.hits}/{scored.trials} = {rate:.3f}. "
+                "A hit is agreement. The mean and the stat are both >= the line, "
+                "or both below it."
+            ),
+            _side_line("Predicted over (mean >= line)", scored.over_hits, scored.over_trials),
+            _side_line("Predicted under (mean < line)", scored.under_hits, scored.under_trials),
+        ]
     probability_lines, bins = probability_section(summary.prob_trials, chart_name=chart_name)
     svg = None if bins is None else reliability_svg(bins)
     header = [
@@ -200,16 +237,20 @@ def render_report(summary: ReplaySummary, *, chart_name: str) -> tuple[str, str 
             f"Games in range: {summary.games_seen}",
             f"Kalshi-resolved players in the database: {summary.covered_players}",
             f"Forecasts scored: {summary.forecasts}",
-            f"Abstained (fewer than 5 prior games): {summary.abstained}",
+            (
+                f"No row visible at 16:00 UTC: {summary.no_visible_history} player-props. "
+                "These players may have history. It was ingested after the clock."
+            ),
+            ("Visible history shorter than 5 games: " f"{summary.short_history} player-props."),
             f"Skipped (prior team not in this game): {summary.skipped_team}",
             mae_line,
-            hit_line,
+            *hit_lines,
+            *_sample_lines(summary),
             "",
-            "MAE counts each player-prop once.",
+            "MAE counts each player-prop with a forecast, including games with no line.",
             "Hit rate counts each distinct Kalshi line once.",
             "Brier and log loss count each Kalshi contract once.",
             "All three are conditional on the player appearing in the box score.",
-            "A handful of games is a sample. The held-out month is a separate check.",
             "",
             *probability_lines,
             "",

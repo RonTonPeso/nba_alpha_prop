@@ -14,6 +14,8 @@ Cover:
 - What would make the choice wrong, and which test or report would show that.
 - Anything you did not verify (database down, no real-month score, a clock you could not observe).
 
+When a review changes the work, add a "What changed after review" section to that milestone's provenance note in the same work. Name the review, then three groups: what the review required, what the code or the docs did about it, and what was left and why. A corrected number with no line for the review is not the record. Do this for every review, including ones that confirm the code and change nothing.
+
 Do not mark a roadmap acceptance item done unless the command or test that proves it has been run and the result is in the note.
 
 Keep personal planning files gitignored (`Roadmap.md`, `PRD.md`, `process.md`, `CLAUDE.md`, `Reviewer.md`, `AGENTS.md`). The provenance note is the version that can be committed.

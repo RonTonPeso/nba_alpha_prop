@@ -5,6 +5,12 @@ Stack-ordered: newest entries pushed onto the top. Scroll down for older work.
 
 ---
 
+# M4 report correction after the outside review (2026-11-07)
+
+The June probability section is one game, `0042500401` on 3 June, scored from history whose newest visible game was hundreds of days earlier. The November file has no markets to score. The generator now says so: agreement is split into over and under, abstentions are split into invisible rows and short windows, and a scored window names its contract dates and the gap back to the newest visible game. `ingested_at` was not rewritten. The availability-clock decision is still open. The review delta, including what was left, is `docs/provenance/m4-calibration.md` under "What changed after the 7 Nov 2026 review."
+
+---
+
 # M4 start: calibration on the baseline replay (2026-11-06)
 
 Branch `m4-calibration` from `origin/main` at `3abadf1` (PR #3 merged).

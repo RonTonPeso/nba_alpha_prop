@@ -211,9 +211,10 @@ def probability_section(
                 "Calibration error: not scored.",
                 "Quoted mids at or before 16:00 UTC: 0.",
                 (
-                    "No snapshot was eligible, or no forecast was scored. "
-                    "ADR-3 records that the historical backfill has settlements "
-                    "and does not have the book from before this system polled."
+                    "No contract was scored. The counts above say whether that "
+                    "was invisible history, a window shorter than 5 games, or "
+                    "a forecast with no line. A missing order book is a "
+                    "separate empty state."
                 ),
             ],
             None,

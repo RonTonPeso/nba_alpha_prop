@@ -118,6 +118,8 @@ def test_empty_forecast_report_does_not_call_november_too_early() -> None:
     text, svg = render_report(summary, chart_name="unused.svg")
     assert "No forecast was produced" in text
     assert "earlier month" not in text
+    assert "ADR-3" not in text
+    assert "Games with a scored contract: 0." in text
     assert svg is None
 
 
@@ -134,6 +136,9 @@ def test_ci_smoke_synthetic_week_has_known_brier() -> None:
     text, svg = render_report(summary, chart_name="m4-calibration-synthetic.svg")
     assert "Brier score: 0.062500 on 35 contracts." in text
     assert "SYNTHETIC." in text
+    assert "Predicted under (mean < line): 35/35 = 1.000." in text
+    assert "Over means predicted mean >= line and actual stat >= line." not in text
+    assert "typed fixture" in text
     assert svg is not None
     assert "<circle " in svg
     lines, bins = probability_section(summary.prob_trials, chart_name="ignored.svg")

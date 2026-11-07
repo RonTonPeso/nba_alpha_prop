@@ -43,6 +43,8 @@ class WriteSummary:
     inserted: int = 0
     skipped_existing: int = 0
     abstained: int = 0
+    no_visible_history: int = 0
+    short_history: int = 0
     skipped_team: int = 0
 
 
@@ -166,6 +168,7 @@ def predict_player_game(
     as_of = prediction_time_for(game.game_date)
     history = history_before(session, player_id=player_id, as_of=as_of)
     if not history:
+        summary.no_visible_history += len(prop_types)
         summary.abstained += len(prop_types)
         return [], summary
     if history[0].team_id not in (game.home_team_id, game.away_team_id):
@@ -183,6 +186,7 @@ def predict_player_game(
             rest_days=rest_days,
         )
         if forecast is None:
+            summary.short_history += 1
             summary.abstained += 1
             continue
         forecasts.append(forecast)
@@ -270,6 +274,8 @@ def run_daily_predictions(today: date | None = None) -> WriteSummary:
                 summary.inserted += part.inserted
                 summary.skipped_existing += part.skipped_existing
                 summary.abstained += part.abstained
+                summary.no_visible_history += part.no_visible_history
+                summary.short_history += part.short_history
                 summary.skipped_team += part.skipped_team
         session.commit()
     logger.info(
