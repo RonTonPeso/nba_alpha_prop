@@ -1,7 +1,8 @@
 """Turn prior box scores into stored baseline predictions.
 
 Feature reads go through ``query_player_game_logs``, so ``event_time`` and
-``ingested_at`` both have to clear ``as_of``. The box score of the game
+``available_at`` both have to clear ``as_of``. ``ingested_at`` is the
+fetch time and is not the feature clock. The box score of the game
 being scored is a label. It is not passed into ``forecast_prop``.
 
 Which team the player is on, for home/away, comes from their most recent

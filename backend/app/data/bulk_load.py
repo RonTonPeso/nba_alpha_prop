@@ -21,7 +21,7 @@ import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from sqlmodel import Session, select
 
@@ -136,12 +136,15 @@ def load_season(
     season_type: str = "Regular Season",
     date_from: date | None = None,
     date_to: date | None = None,
+    availability: Literal["reconstructed", "observed"] = "reconstructed",
 ) -> SeasonLoadSummary:
     """Load one season into the DB. Caller commits.
 
     ``date_from`` / ``date_to`` narrow the LeagueGameLog window. Bulk
     historical leaves them None (whole season). The daily ingestion job
-    sets both to yesterday for a one-day pull.
+    sets both to yesterday for a one-day pull and passes
+    ``availability="observed"`` so ``available_at`` is the fetch time.
+    The default ``reconstructed`` stamps noon UTC the next day.
 
     Order of operations is dictated by FK dependencies:
     teams → players → games → game_results → player_game_logs.
@@ -219,7 +222,11 @@ def load_season(
             continue
         try:
             game, result = team_game_log_rows_to_orm(
-                rows[0], rows[1], season=season, season_type=season_type
+                rows[0],
+                rows[1],
+                season=season,
+                season_type=season_type,
+                availability=availability,
             )
         except (KeyError, ValueError, TypeError) as exc:
             logger.warning("Skipping GAME_ID %s: %s", game_id, exc)
@@ -256,7 +263,12 @@ def load_season(
             if key in existing_pgls:
                 summary.pgls_skipped += 1
                 continue
-            pgl = player_game_log_row_to_orm(row, season=season, season_type=season_type)
+            pgl = player_game_log_row_to_orm(
+                row,
+                season=season,
+                season_type=season_type,
+                availability=availability,
+            )
         except (KeyError, ValueError, TypeError) as exc:
             logger.warning("Skipping malformed P-row: %s", exc)
             summary.pgls_errors += 1

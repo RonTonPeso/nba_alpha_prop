@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from sqlmodel import Session, select
 
+from app.db.availability import reconstructed_available_at
 from app.db.tables import Game, Market, Player, PlayerGameLog, Prediction, Team
 from app.models.baseline import MODEL_VERSION
 from app.models.predict import predict_player_game
@@ -56,6 +57,7 @@ def _add_log(
     points: int,
     ingested_at: datetime,
     team_id: int = HOME_ID,
+    available_at: datetime | None = None,
 ) -> None:
     session.add(
         PlayerGameLog(
@@ -66,6 +68,7 @@ def _add_log(
             season_type="Regular Season",
             event_time=datetime(game_date.year, game_date.month, game_date.day, 23, 0, tzinfo=UTC),
             ingested_at=ingested_at,
+            available_at=ingested_at if available_at is None else available_at,
             points=points,
             rebounds=5,
             assists=4,
@@ -149,6 +152,33 @@ def test_late_ingestion_is_invisible(db_session: Session) -> None:
     )
 
     assert forecasts[0].mean == 10
+
+
+def test_reconstructed_history_moves_the_mean(db_session: Session) -> None:
+    """Fetched in 2026, available the morning after each game."""
+    _seed_teams(db_session)
+    for offset in range(5):
+        game_date = date(2025, 1, 2) + timedelta(days=offset * 2)
+        game_id = f"999_recon_{offset}"
+        _add_game(db_session, game_id=game_id, game_date=game_date)
+        _add_log(
+            db_session,
+            game_id=game_id,
+            game_date=game_date,
+            points=15,
+            ingested_at=datetime(2026, 6, 1, tzinfo=UTC),
+            available_at=reconstructed_available_at(game_date),
+        )
+    target = _add_game(db_session, game_id="999_recon_target", game_date=date(2025, 1, 20))
+
+    forecasts, _summary = predict_player_game(
+        db_session,
+        player_id=PLAYER_ID,
+        game=target,
+        prop_types=("points",),
+    )
+
+    assert forecasts[0].mean == 15
 
 
 def test_same_version_is_not_written_twice(db_session: Session) -> None:

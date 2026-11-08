@@ -10,12 +10,18 @@ M3 table: predictions. One row per (player, game, prop, model version).
 prediction_time is when the forecast claims to have been made.
 ingested_at is when this system stored the row.
 
-Fact tables (games, game_results, player_game_logs, market_snapshots,
-market_settlements) carry both event_time (when the fact was true in
-the world) and ingested_at (when this system recorded it). Backtest
-queries must filter on both:
+Fact tables carry event_time (when the fact was true in the world)
+and ingested_at (when this system recorded it). Box scores and game
+results also carry available_at. For a bulk load that is 12:00 UTC
+on the day after game_date. For a live fetch it equals ingested_at.
 
-    WHERE event_time < :as_of AND ingested_at <= :as_of
+Feature reads of player_game_logs filter on:
+
+    WHERE event_time < :as_of AND available_at <= :as_of
+
+Market quotes stay on both original clocks:
+
+    WHERE quoted_at <= :as_of AND ingested_at <= :as_of
 
 For market_snapshots the event_time analog is quoted_at; for
 market_settlements it's settled_at.
@@ -135,6 +141,11 @@ class GameResult(SQLModel, table=True):
             nullable=False,
         ),
     )
+    # 12:00 UTC the day after game_date for a bulk load. The fetch time
+    # for a live load. Feature reads use this, not ingested_at.
+    available_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
     raw_data: dict[str, Any] = Field(
         default_factory=dict,
         sa_column=Column(JSONB, nullable=False),
@@ -148,6 +159,7 @@ class PlayerGameLog(SQLModel, table=True):
     __table_args__ = (
         Index("ix_pgl_player_event", "player_id", "event_time"),
         Index("ix_pgl_player_event_ingested", "player_id", "event_time", "ingested_at"),
+        Index("ix_pgl_player_event_available", "player_id", "event_time", "available_at"),
         Index("ix_pgl_ingested", "ingested_at"),
     )
 
@@ -170,6 +182,11 @@ class PlayerGameLog(SQLModel, table=True):
             server_default=func.now(),
             nullable=False,
         ),
+    )
+    # 12:00 UTC the day after game_date for a bulk load. The fetch time
+    # for a live load. Feature reads use this, not ingested_at.
+    available_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False),
     )
 
     # Stats. This is nullable.

@@ -19,6 +19,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 
 from app.data.cache import CachedHttpClient
+from app.db.availability import reconstructed_available_at
 from app.db.tables import Game, GameResult, Player, PlayerGameLog, Team
 
 _NBA_STATS_BASE = "https://stats.nba.com/stats"
@@ -77,10 +78,9 @@ def _event_time_from_game_date(game_date: str) -> datetime:
     """``YYYY-MM-DD`` → next-day midnight UTC.
 
     Conservative approximation. LeagueGameLog doesn't include tip times.
-    The real point-in-time enforcer is ``ingested_at``; event_time being
-    slightly late just means the game ordering is one notch off, never
-    a leak. We never insert a row for a game we haven't seen the box
-    score for, so ingested_at is always honest.
+    ``event_time`` being slightly late means the game ordering is one
+    notch off. The feature clock is ``available_at``. ``ingested_at``
+    stays the fetch time.
     """
     d = date.fromisoformat(game_date)
     return datetime(d.year, d.month, d.day, tzinfo=UTC) + timedelta(days=1)
@@ -138,17 +138,35 @@ def _int_or_none(raw: Any) -> int | None:
     return int(raw)
 
 
+def _clocks(
+    game_date: date, availability: Literal["reconstructed", "observed"]
+) -> tuple[datetime, datetime]:
+    """Return ``(ingested_at, available_at)``.
+
+    ``observed`` is a live fetch: both clocks are now. ``reconstructed``
+    is a bulk load: the fetch time stays honest and ``available_at`` is
+    noon UTC the next day.
+    """
+    fetched_at = datetime.now(UTC)
+    if availability == "observed":
+        return fetched_at, fetched_at
+    return fetched_at, reconstructed_available_at(game_date)
+
+
 def player_game_log_row_to_orm(
     row: dict[str, Any],
     *,
     season: str,
     season_type: str,
+    availability: Literal["reconstructed", "observed"] = "reconstructed",
 ) -> PlayerGameLog:
     """Convert one ``PlayerOrTeam='P'`` row into a ``PlayerGameLog``.
 
     Does not touch the DB. Caller is responsible for ensuring the
     referenced Player/Team/Game exist before adding to a session.
     """
+    game_date = date.fromisoformat(str(row["GAME_DATE"]))
+    ingested_at, available_at = _clocks(game_date, availability)
     return PlayerGameLog(
         player_id=int(row["PLAYER_ID"]),
         game_id=str(row["GAME_ID"]),
@@ -156,6 +174,8 @@ def player_game_log_row_to_orm(
         season=season,
         season_type=season_type,
         event_time=_event_time_from_game_date(str(row["GAME_DATE"])),
+        ingested_at=ingested_at,
+        available_at=available_at,
         minutes=_parse_minutes(row.get("MIN")),
         points=_int_or_zero(row.get("PTS")),
         rebounds=_int_or_zero(row.get("REB")),
@@ -224,6 +244,7 @@ def team_game_log_rows_to_orm(
     *,
     season: str,
     season_type: str,
+    availability: Literal["reconstructed", "observed"] = "reconstructed",
 ) -> tuple[Game, GameResult]:
     """Pair of T-level rows for one ``GAME_ID`` → ``(Game, GameResult)``.
 
@@ -240,6 +261,7 @@ def team_game_log_rows_to_orm(
     game_id = str(home_row["GAME_ID"])
     game_date_str = str(home_row["GAME_DATE"])
     event_time = _event_time_from_game_date(game_date_str)
+    ingested_at, available_at = _clocks(date.fromisoformat(game_date_str), availability)
 
     game = Game(
         game_id=game_id,
@@ -258,6 +280,8 @@ def team_game_log_rows_to_orm(
         away_score=_int_or_zero(away_row.get("PTS")),
         status="final",
         event_time=event_time,
+        ingested_at=ingested_at,
+        available_at=available_at,
         raw_data={"home": home_row, "away": away_row},
     )
 

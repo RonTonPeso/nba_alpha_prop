@@ -61,6 +61,7 @@ def run_daily_ingest(today: date | None = None) -> SeasonLoadSummary:
             season_type="Regular Season",
             date_from=yesterday,
             date_to=yesterday,
+            availability="observed",
         )
         session.commit()
     return summary
