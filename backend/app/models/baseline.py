@@ -180,19 +180,60 @@ def mean_absolute_error(pairs: list[tuple[float, float]]) -> float | None:
     return sum(abs(pred - actual) for pred, actual in pairs) / len(pairs)
 
 
-def over_hit_rate(trials: list[tuple[float, float, float]]) -> tuple[int, int] | None:
-    """Hits and trials for predicted-over vs actual-over.
+@dataclass(frozen=True)
+class Agreement:
+    """How often the mean and the stat sit on the same side of the line.
 
-    Each trial is (predicted_mean, actual, line). Over means ``value >= line``,
-    which matches Kalshi "X+" settlement. A tie on the line counts as over.
-    None when there are no lines to score.
+    Over means ``value >= line``. A hit is both over or both under.
+    The two side counts are the reference for the combined rate.
+    """
+
+    hits: int
+    trials: int
+    over_hits: int
+    over_trials: int
+    under_hits: int
+    under_trials: int
+
+
+def agreement(trials: list[tuple[float, float, float]]) -> Agreement | None:
+    """Split hits into predicted-over and predicted-under.
+
+    Each trial is (predicted_mean, actual, line). None when there are no lines.
     """
     if not trials:
         return None
     hits = 0
+    over_hits = 0
+    over_trials = 0
+    under_hits = 0
+    under_trials = 0
     for predicted, actual, line in trials:
         predicted_over = predicted >= line
         actual_over = actual >= line
-        if predicted_over == actual_over:
-            hits += 1
-    return hits, len(trials)
+        if predicted_over:
+            over_trials += 1
+            if actual_over:
+                over_hits += 1
+                hits += 1
+        else:
+            under_trials += 1
+            if not actual_over:
+                under_hits += 1
+                hits += 1
+    return Agreement(
+        hits=hits,
+        trials=len(trials),
+        over_hits=over_hits,
+        over_trials=over_trials,
+        under_hits=under_hits,
+        under_trials=under_trials,
+    )
+
+
+def over_hit_rate(trials: list[tuple[float, float, float]]) -> tuple[int, int] | None:
+    """Combined agreement hits and trials. None when there are no lines."""
+    result = agreement(trials)
+    if result is None:
+        return None
+    return result.hits, result.trials

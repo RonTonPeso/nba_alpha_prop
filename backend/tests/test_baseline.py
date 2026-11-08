@@ -8,6 +8,7 @@ from datetime import date, timedelta
 
 from app.models.baseline import (
     HistoryGame,
+    agreement,
     forecast_prop,
     mean_absolute_error,
     over_hit_rate,
@@ -98,6 +99,15 @@ def test_over_hit_rate_treats_the_line_as_greater_or_equal() -> None:
     hits, trials = result
     assert trials == 3
     assert hits == 2
+    # Two trials are predicted over and both happen. One is predicted under
+    # and the stat goes over. Combined hits are 2, and they are not "both over"
+    # as a definition of the whole rate: the miss is an under call.
+    split = agreement([(20, 20, 20), (20, 30, 25), (20, 18, 15)])
+    assert split is not None
+    assert split.over_trials == 2
+    assert split.over_hits == 2
+    assert split.under_trials == 1
+    assert split.under_hits == 0
 
 
 def test_mae_is_the_mean_absolute_miss() -> None:

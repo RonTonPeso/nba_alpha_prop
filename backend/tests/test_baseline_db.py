@@ -227,3 +227,8 @@ def test_replay_scores_a_line_without_reading_the_target_as_a_feature(db_session
     # Points forecast is 20. Actual is 28. The other props are 5 and 4 against themselves.
     assert abs(summary.mae - ((8 + 0 + 0) / 3)) < 1e-9
     assert summary.hits == (0, 1)  # predicted 20 under 22.5, actual 28 over 22.5
+    assert len(summary.prob_trials) == 1
+    trial = summary.prob_trials[0]
+    assert trial.outcome == 1
+    assert trial.market_probability is None
+    assert trial.probability < 0.5

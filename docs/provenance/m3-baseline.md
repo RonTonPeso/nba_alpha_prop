@@ -16,7 +16,7 @@ Roadmap acceptance for M3:
 
 - Predictions are stored with a point-in-time timestamp. Implemented. `prediction_time` is 16:00 UTC on the game date. The regression tests in `backend/tests/test_baseline_db.py` show a future game and a late-ingested game do not move the mean.
 - `python -m app.backtest.run --start 2025-01-01 --end 2025-01-31` writes a report. The command exists. Against the local database on 6 Nov 2026, January 2025 contains 227 games, and every `player_game_logs.ingested_at` falls between 31 May 2026 and 15 Jun 2026 (112,884 rows). A replay that keeps the filter abstains, because none of those rows were "known" in January 2025. That result is the guard, not a failed query.
-- Baseline hit rate beats 50% on a held-out month. Not claimed. Kalshi NBA props start in November 2025, so January 2025 has no lines to be "over." A hit rate without a line would be a number I invented.
+- Baseline hit rate beats 50% on a held-out month. Not claimed. A hit rate without a line would be a number I invented. The sentence originally said Kalshi coverage starts in November 2025. The loaded `markets` table does not support that: the earliest `kalshi_event_date` and `close_time` are both 25 March 2026.
 - The point-in-time regression test passes. That is `test_baseline_db.py`, on top of the existing `test_point_in_time.py`.
 
 PRD section 6.2 also asks for a full posterior, SHAP, and a hybrid-versus-baseline comparison. Those belong to M5 and M6. Shipping them inside M3 would skip the milestones the roadmap ordered.
@@ -75,9 +75,9 @@ M3's branch point says Kalshi-covered players, about 50. The loaded `markets` ta
 
 The daily job is narrower: markets whose `game_id` is today's game. A covered player with no market tonight gets no row. The replay scores every covered player who logged a box score in range, and hit rate only counts lines that exist for that game.
 
-### Hit rate is predicted-over versus actual-over, per line.
+### Hit rate is agreement on the side of the line.
 
-Over means `value >= line`. That matches Kalshi "X+" and the `floor_strike` note in the M2 code (`34.5` on a "35+" market still uses `>=` against the stored line). A push on the line counts as over for both sides, so it is a hit. Several strikes for one player-game are several trials. MAE counts the player-prop once, so five strikes do not make one player five times as important in the error.
+Over means `value >= line`. That matches Kalshi "X+" and the `floor_strike` note in the M2 code (`34.5` on a "35+" market still uses `>=` against the stored line). A push on the line counts as over. A hit is both sides over, or both sides under. The first draft of this section called the metric predicted-over versus actual-over and described only the over/over case. The code already counted a correct under as a hit. The report prints the two sides separately. Several strikes for one player-game are several trials. MAE counts the player-prop once, so five strikes do not make one player five times as important in the error.
 
 Rejected: scoring only the strike closest to the mean. That throws away markets the roadmap's hit rate can use, and it chooses the line with information from the prediction itself.
 
