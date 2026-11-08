@@ -5,10 +5,11 @@ Usage, from ``backend/``::
     uv run python -m app.backtest.run --start 2025-01-01 --end 2025-01-31
 
 The feature clock is ``prediction_time`` (16:00 UTC on the game date),
-passed into ``query_player_game_logs``. Bulk-loaded history is visible
-only when its ``ingested_at`` is at or before that clock. A January 2025
-replay against rows ingested in 2026 will abstain. That is the leak
-guard working. The report says so instead of dropping the filter.
+passed into ``query_player_game_logs``. A box score is visible when
+``event_time`` is before that clock and ``available_at`` is at or
+before it. Bulk rows use noon UTC the day after the game as
+``available_at``. ``ingested_at`` stays the fetch time. Quotes still
+require ``quoted_at`` and ``ingested_at`` at or before the clock.
 
 Hit rate needs a Kalshi line on that player, game, and prop. In this
 database the loaded markets begin on 2026-03-25, so an earlier window
@@ -230,16 +231,19 @@ def render_report(summary: ReplaySummary, *, chart_name: str) -> tuple[str, str 
             "It is not the XGBoost model and not the Bayesian posterior.",
             "",
             "Features use `query_player_game_logs` at 16:00 UTC on the game date.",
-            "Both `event_time` and `ingested_at` have to fall before that clock.",
-            "A bulk load whose `ingested_at` is the fetch day will not be visible",
-            "to a replay set before that fetch.",
+            "`event_time` has to be before that clock.",
+            "`available_at` has to be at or before that clock.",
+            "For a bulk-loaded box score, `available_at` is 12:00 UTC on the",
+            "day after the game. `ingested_at` is the fetch time and is not",
+            "the feature clock. Quotes still use `quoted_at` and `ingested_at`.",
             "",
             f"Games in range: {summary.games_seen}",
             f"Kalshi-resolved players in the database: {summary.covered_players}",
             f"Forecasts scored: {summary.forecasts}",
             (
                 f"No row visible at 16:00 UTC: {summary.no_visible_history} player-props. "
-                "These players may have history. It was ingested after the clock."
+                "No box score had event_time before the clock and available_at "
+                "at or before it."
             ),
             ("Visible history shorter than 5 games: " f"{summary.short_history} player-props."),
             f"Skipped (prior team not in this game): {summary.skipped_team}",

@@ -243,42 +243,52 @@ There are no features yet. That is the point. Getting deployment unblocked early
 
 ## M5: XGBoost Feature Predictor
 
-**Effort:** ~25-35 hours
+**Status:** Fit on 2026-11-07, `uv run python -m app.models.fit`. Holdout starts 2025-12-05 (last 20% of game dates). Headline rest is 14 days or less: 993 games, XGBoost MAE 2.627 against baseline 2.776 on 62,271 player-props. The same direction holds for points (4.603 vs 4.889), rebounds (1.920 vs 2.021), and assists (1.358 vs 1.419). Residual Brier 0.159651 against baseline 0.168920 on 18,878 contracts. The report is `docs/results/m5-xgb.md`. The note is `docs/provenance/m5-xgb.md`. The scheduler was not wired.
 
-**Goal:** A feature-rich XGBoost model replaces the baseline as the primary point predictor. SHAP values are stored alongside predictions for later dashboard use.
+**Effort:** ~25-35 hours after the clock decision. A strict-clock pass is a short refusal report, not a model.
+
+**Goal:** A second point predictor, one XGBoost model per prop, trained only on rows the same 16:00 UTC clocks can see. The baseline keeps running. The milestone is the comparison.
 
 **Tasks:**
-- Feature engineering pipeline (10-20 features):
-  - Player rolling stats over multiple windows (last 5, 10, 20 games)
-  - Opponent defensive rating, pace
-  - Home/away
-  - Rest days
-  - Recent usage rate
-  - Team's recent offensive efficiency
-  - Lineup composition (basic version, will be enhanced in M7)
-  - Days since last 30+ point game (as a regression-to-mean signal)
-- Training script with `TimeSeriesSplit` cross-validation
-- Light hyperparameter tuning (random search, 30-50 iterations)
-- SHAP value computation per prediction, stored
-- Model versioning: every prediction records the model version that made it
-- Integration: replace baseline in the daily prediction job
+- Ten features, all computed from prior box scores visible at the prediction clock:
+  - Points mean, last 5 games and last 15
+  - Rebounds mean, last 15
+  - Assists mean, last 15
+  - Minutes mean, last 15
+  - Home or away, from the previous visible game's team
+  - Rest days, capped at 14
+  - Box-score usage proxy over the last 15: field-goal attempts + 0.44 * free-throw attempts + turnovers, divided by the same sum for teammates in those games
+  - Opponent points allowed, mean of the opponent's last 15 visible games
+  - Days since the player's last 30-point game, capped at 60
+- One booster per prop (`points`, `rebounds`, `assists`). Fixed hyperparameters on the first fit.
+- Date holdout: sort by `game_date`, train on earlier dates, score the last held-out dates. Same-night rows stay in one side of the split.
+- Residual standard deviation from the training rows only, so the stored row still has a normal band and M4 can score Brier. The band is a residual, not a posterior.
+- SHAP values for the top 5 features, stored on the prediction payload.
+- `model_version` `xgb-m5-v1` on every row. `baseline-m3-v1` continues to be written.
+- One command fits the model and writes the comparison report.
 
 **Considerations:**
-- Feature engineering is iterative. Don't try to nail it on the first pass. Ship 10 features, see what XGBoost weights highest, then iterate.
-- `TimeSeriesSplit` is non-negotiable. Standard k-fold leaks future info.
-- SHAP can be slow on large feature sets. For v1, storing SHAP values for the top features per prediction is enough; don't compute full Shapley values for everything.
-- Compare against M3 baseline directly. If XGBoost doesn't clearly beat the baseline on out-of-sample MAE, something is wrong (check for leakage, check the baseline isn't accidentally too strong).
+- The feature builder uses the same clock as `query_player_game_logs`: `event_time` before 16:00 UTC and `available_at` at or before it. A future `available_at` must not move the vector. A late fetch with an earlier `available_at` is visible. That test is the milestone's leak gate.
+- A gap over 14 days sets `low_confidence` and leaves that row out of the headline MAE. The 3 June sample had gaps of 416 to 476 days. Those rows can appear in an appendix. They cannot be the win.
+- `TimeSeriesSplit` on a frame that is not ordered by game date leaks. The split is a cut on dates.
+- Random search waits until a fixed model beats the baseline on the holdout. Searching first spends the holdout.
+- Lineup composition waits for M7. There is no starter table.
+- Opponent defensive rating and pace are not columns. The points-allowed mean and the usage proxy are the substitutes, and the report calls them proxies.
+- The daily job still learns tonight's game from a box score that does not exist yet. Replay and the training command are the milestone. The scheduler wire-up follows a schedule source that exists before tip.
 
 **Branch points:**
-- *XGBoost vs LightGBM vs CatBoost?* Default: XGBoost (locked in CLAUDE.md). All three are reasonable. Switching costs a day of refactoring.
-- *Feature count: 10 vs 50 vs 100?* Default: start with 10-15, expand to 25-40 by the end of this milestone. Existing nba_ev_bot uses 100+; you can match that depth in v2 if it matters.
-- *Quantile regression for early uncertainty estimates?* Default: skip; the Bayesian wrapper in M6 handles uncertainty. Quantile regression here would be redundant.
+- *XGBoost vs LightGBM vs CatBoost?* XGBoost, as `docs/CLAUDE.md` already locks. Chosen with the original roadmap.
+- *Feature count?* Ten, listed above. Chosen 2026-11-07. More features wait until these ten beat the baseline on a legal holdout.
+- *Quantile regression?* Skipped. M6 owns the distribution. Chosen with the original roadmap. The residual band exists so calibration has a number, and the report says what it is.
+- *Replace the baseline?* No. Chosen 2026-11-07. The acceptance line is a comparison, so the baseline has to keep producing rows.
+- *Train by dropping `ingested_at`?* No. Chosen 2026-11-07. Training uses `available_at`. Quotes stay on `quoted_at` and `ingested_at`. The note is `docs/provenance/available-at.md`.
 
 **Acceptance:**
-- XGBoost beats baseline on out-of-sample backtest (lower MAE, better calibration)
-- SHAP values stored per prediction
-- Training is reproducible from one command (`make train` or equivalent)
-- Model version is recorded with every prediction
+- On a declared holdout, with both clocks applied, XGBoost MAE is lower than the baseline on the same player-props, and the holdout is more than one game with history newer than 14 days. If no such holdout exists, the report says the comparison was refused and the milestone stays open.
+- The residual band's Brier is reported next to the baseline's Brier on the same contracts. A lower MAE with a worse Brier is reported as mixed, not as a pass.
+- Top 5 SHAP values are stored on each `xgb-m5-v1` row.
+- One command reproduces the fit.
+- `model_version` is stored on every prediction, and the baseline rows are still there.
 
 ---
 

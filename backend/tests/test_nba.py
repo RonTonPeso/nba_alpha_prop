@@ -5,7 +5,7 @@ full fetcher + cache path, and the bulk_load tests cover the parsers
 end-to-end. Only parsers with non-trivial logic get unit tests here.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlmodel import Session
@@ -18,6 +18,7 @@ from app.data.nba import (
     player_game_log_row_to_orm,
     team_game_log_rows_to_orm,
 )
+from app.db.availability import reconstructed_available_at
 from tests._fakes import FakeResponse, FakeSession
 
 
@@ -53,6 +54,7 @@ def test_player_row_to_orm_handles_dnp_missing_stats() -> None:
     assert pgl.plus_minus is None
     assert pgl.points == 0
     assert pgl.rebounds == 0
+    assert pgl.available_at == reconstructed_available_at(date(2024, 12, 15))
 
 
 def test_team_rows_to_game_and_result() -> None:
@@ -78,6 +80,7 @@ def test_team_rows_to_game_and_result() -> None:
     assert game.home_team_id == 1610612747
     assert game.away_team_id == 1610612738
     assert game.event_time == datetime(2024, 12, 16, tzinfo=UTC)
+    assert result.available_at == reconstructed_available_at(date(2024, 12, 15))
     assert result.home_score == 112
     assert result.away_score == 108
     assert result.status == "final"

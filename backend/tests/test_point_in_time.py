@@ -1,15 +1,18 @@
 """Regression test for point-in-time correctness on player_game_logs.
 
 This is the single most important test in the project. It proves the
-schema's ``event_time`` / ``ingested_at`` filter actually prevents
-future data from leaking into historical queries.
+schema's ``event_time`` / ``available_at`` filter actually prevents
+future data from leaking into historical queries. ``ingested_at`` is
+the fetch time. A late fetch with an earlier ``available_at`` is the
+reconstructed bulk row, and that row is supposed to be visible.
 
 Five cases:
 1. A row visible at simulated ``as_of`` comes back.
 2. A row with ``event_time`` in the future is excluded.
-3. A row with past ``event_time`` but future ``ingested_at`` is
-   excluded. The sneaky case: the game happened but we didn't know
-   about it yet.
+3. A row with past ``event_time`` but future ``available_at`` is
+   excluded. The sneaky case: the game happened but the knowledge
+   clock had not arrived. A late ``ingested_at`` with an earlier
+   ``available_at`` is visible.
 4. Rows for other players are excluded.
 5. Calling the helper without an explicit ``as_of`` raises TypeError.
 """
@@ -68,6 +71,7 @@ def _make_pgl(
     ingested_at: datetime,
     points: int,
     player_id: int = TEST_PLAYER_ID,
+    available_at: datetime | None = None,
 ) -> PlayerGameLog:
     return PlayerGameLog(
         player_id=player_id,
@@ -77,6 +81,7 @@ def _make_pgl(
         season_type="Regular Season",
         event_time=event_time,
         ingested_at=ingested_at,
+        available_at=ingested_at if available_at is None else available_at,
         points=points,
     )
 
@@ -122,8 +127,12 @@ def test_future_event_time_is_excluded(db_session: Session) -> None:
     assert rows == []
 
 
-def test_future_ingested_at_is_excluded(db_session: Session) -> None:
-    """The subtle case: game happened, but the system hadn't ingested it yet."""
+def test_future_available_at_is_excluded(db_session: Session) -> None:
+    """The game happened, but available_at is still after the clock.
+
+    The helper sets available_at equal to ingested_at when the caller
+    does not pass one, which is the live-fetch case.
+    """
     _seed_identity(db_session)
     db_session.add(
         _make_pgl(
@@ -141,6 +150,29 @@ def test_future_ingested_at_is_excluded(db_session: Session) -> None:
     )
 
     assert rows == []
+
+
+def test_reconstructed_available_at_is_visible_despite_a_late_fetch(db_session: Session) -> None:
+    """Bulk history: fetched in 2026, known the morning after the game."""
+    _seed_identity(db_session)
+    db_session.add(
+        _make_pgl(
+            event_time=datetime(2024, 1, 5, 22, 0, tzinfo=UTC),
+            ingested_at=datetime(2026, 6, 1, tzinfo=UTC),
+            available_at=datetime(2024, 1, 6, 12, 0, tzinfo=UTC),
+            points=42,
+        )
+    )
+    db_session.flush()
+
+    rows = query_player_game_logs(
+        player_id=TEST_PLAYER_ID,
+        as_of=datetime(2024, 1, 10, 12, 0, tzinfo=UTC),
+        session=db_session,
+    )
+
+    assert len(rows) == 1
+    assert rows[0].points == 42
 
 
 def test_rolling_average_does_not_leak_future_data(db_session: Session) -> None:

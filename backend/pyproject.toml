@@ -14,6 +14,7 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "sqlmodel>=0.0.38",
     "uvicorn[standard]>=0.47.0",
+    "xgboost>=3.2.0",
 ]
 
 [dependency-groups]

@@ -5,6 +5,20 @@ Stack-ordered: newest entries pushed onto the top. Scroll down for older work.
 
 ---
 
+# M5 fit (2026-11-07)
+
+`uv run python -m app.models.fit` from `backend/`. Holdout from 2025-12-05. Headline MAE 2.627 vs 2.776 on 62,271 player-props, 993 games, rest at most 14 days. Points, rebounds, and assists each improved. Residual Brier 0.159651 vs 0.168920 on 18,878 contracts. Stored `xgb-m5-v1` rows: 63,552, each with five SHAP values. The command also inserted the missing holdout baseline rows and left the 180 already-stored Finals rows alone. Report `docs/results/m5-xgb.md`. Note `docs/provenance/m5-xgb.md`. Not committed. The daily job was not switched.
+
+# Bulk history clock: available_at (2026-11-07)
+
+`available_at` is on `player_game_logs` and `game_results`. Bulk rows are 12:00 UTC the day after `game_date`. The daily job passes `availability="observed"`, so a late fetch does not claim noon. `query_player_game_logs` filters `event_time` and `available_at`. Quotes are unchanged. Migration `b7c2e9a41d08` backfilled the local table: 112,884 logs and 5,279 results, zero nulls. A 15 Jan 2025 log is available at 16 Jan 2025 12:00 UTC and still ingested on 31 May 2026. The writeup is `docs/provenance/available-at.md`. June replay after the migration: MAE 2.953 on 180, Brier 0.157574 on 108, one scored date, gaps 4 to 9 days. November: MAE 3.208 on 5151, still 0 contracts. The 168 stored `baseline-m3-v1` rows from 6 November were not rewritten. No booster was fit. Not committed.
+
+# M5 plan, no model code yet (2026-11-07)
+
+The roadmap milestone was rewritten before any booster. The baseline stays, the feature list is ten columns we actually have, lineup and pace are out, and a long rest gap cannot be the win. Training waits on the bulk-history clock. The interviewer note is `docs/provenance/m5-plan.md`.
+
+---
+
 # M4 report correction after the outside review (2026-11-07)
 
 The June probability section is one game, `0042500401` on 3 June, scored from history whose newest visible game was hundreds of days earlier. The November file has no markets to score. The generator now says so: agreement is split into over and under, abstentions are split into invisible rows and short windows, and a scored window names its contract dates and the gap back to the newest visible game. `ingested_at` was not rewritten. The availability-clock decision is still open. The review delta, including what was left, is `docs/provenance/m4-calibration.md` under "What changed after the 7 Nov 2026 review."
