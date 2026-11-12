@@ -5,6 +5,18 @@ Stack-ordered: newest entries pushed onto the top. Scroll down for older work.
 
 ---
 
+# M6 diagnostic review fixes, no new sample (2026-11-09)
+
+The fresh-session review confirmed the 40-player claims and blocked another sample until the gate could fail a NaN R-hat. The gate now rejects non-finite R-hat and ESS, an ESS of 400, an R-hat of 1.01, and any divergence. ArviZ is asked for the unrounded summary. The predictive histogram keeps the below-zero bin and the overflow bin. The report prints the seed, chains, tune, draws, and target accept of the run it makes. The next default is 4 chains. The 9 Nov sample was not rerun, and its report still says 2 chains with the rounded R-hat. The agent typed the starting likelihood. The in-sample training covariate was left as it is and is now stated. Note `docs/provenance/m6-diagnostic.md`.
+
+# M6 diagnostic, milestone still open (2026-11-09)
+
+`uv run python -m app.models.posterior_fit`. Points only, 40 players, seed 0, 2 chains, 400 tune and 400 draw. Training rows in the subset 5006. Headline holdout rows 1655. Residual width on all training rows 6.002. Subset Brier 0.163713 vs residual band 0.163925 on 581 contracts. Divergences 0. `tau` R-hat 1.090, bulk ESS 28. The gate failed. No prediction rows written. Report `docs/results/m6-diagnostic.md`. Note `docs/provenance/m6-diagnostic.md`. Not committed.
+
+# M6 plan, no model code yet (2026-11-09)
+
+The milestone is a player intercept around the saved or refit `xgb-m5-v1` mean, points first. The Brier bar is the residual band, 0.159651 on 18,878 contracts, not the M3 baseline. No position level, no nightly sampler, no ADVI number in the report. The 40-player NUTS run is a diagnostic. Ronnie writes the PyMC likelihood. The note is `docs/provenance/m6-plan.md`.
+
 # M5 fit (2026-11-07)
 
 `uv run python -m app.models.fit` from `backend/`. Holdout from 2025-12-05. Headline MAE 2.627 vs 2.776 on 62,271 player-props, 993 games, rest at most 14 days. Points, rebounds, and assists each improved. Residual Brier 0.159651 vs 0.168920 on 18,878 contracts. Stored `xgb-m5-v1` rows: 63,552, each with five SHAP values. The command also inserted the missing holdout baseline rows and left the 180 already-stored Finals rows alone. Report `docs/results/m5-xgb.md`. Note `docs/provenance/m5-xgb.md`. Not committed. The daily job was not switched.

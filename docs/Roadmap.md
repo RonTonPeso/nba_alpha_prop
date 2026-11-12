@@ -292,63 +292,46 @@ There are no features yet. That is the point. Getting deployment unblocked early
 
 ---
 
-## M6: Bayesian Wrapper (the big one)
+## M6: Bayesian Wrapper
 
-**Effort:** ~40-60 hours
+**Status:** Diagnostic only (2026-11-09). `uv run python -m app.models.posterior_fit` sampled points for 40 seeded players, 2 chains. R-hat and ESS did not clear the gate (`tau` R-hat 1.09 on ArviZ's 2-decimal rounding, bulk ESS 28). Subset Brier 0.163713 against the residual band 0.163925 on 581 contracts. That is not the acceptance sample. No `pymc-m6-v1` rows were written. After the same day's review, the gate treats a non-finite R-hat or ESS as a failure and the plot keeps mass below zero. That sample was not rerun. The note is `docs/provenance/m6-diagnostic.md`. The comparison target remains the M5 residual band, Brier 0.159651 on 18,878 headline contracts.
 
-**Goal:** A hierarchical Bayesian model wraps XGBoost output to produce full posterior distributions per prop. Hierarchical pooling handles low-sample players. Player-level random effects capture individual variation around the XGBoost prediction.
+**Effort:** ~25-40 hours after the points model converges. A sampler that misses the diagnostic bar is a refusal, not a wider model.
 
-**This is the most ambitious milestone. Plan accordingly. By the time you start, you should have finished McElreath chapters 1-4.**
+**Goal:** Replace the single residual width with a posterior for one prop at a time. The XGBoost mean stays the location. A player intercept, pooled toward zero, is the only hierarchy. The milestone is a better Brier than `xgb-m5-v1` on the same holdout contracts, with the diagnostics beside it.
 
-**Sub-phases:**
-
-**Phase A: Reading & toy models (5-10 hours)**
-- McElreath chapters 1-4 if not already done
-- Build the "eight schools" hierarchical model in PyMC as a hello-world
-- Build a one-player, one-prop, one-season toy Bayesian model from scratch
-
-**Phase B: Hierarchical structure without XGBoost (8-12 hours)**
-- Player-level random effects pooled across position clusters
-- Sample with NUTS on a real subset of data
-- Posterior predictive checks
-- Diagnostics: R-hat, ESS, divergences
-
-**Phase C: Integrating XGBoost (8-12 hours)**
-- XGBoost output enters the likelihood as a covariate with a learned weight
-- Player-level deviations from the XGBoost prediction become the random effect
-- Re-run diagnostics
-
-**Phase D: Hierarchical priors over position/role clusters (8-12 hours)**
-- Pool low-sample players toward cluster means
-- Validate that rookie predictions are sensible
-
-**Phase E: Sampling pipeline & posterior storage (5-10 hours)**
-- Production sampling job that runs after each XGBoost prediction batch
-- Posterior summaries stored to the `predictions` table
-- Full traces stored as arviz NetCDF in `models/`
-
-**Phase F: Backtest comparison (5-10 hours)**
-- Backtest using posteriors vs point estimates
-- Brier score should improve (the model's confidence is now calibrated)
-- Document results in `docs/results/`
+**Tasks:**
+- Save or refit `xgb-m5-v1` inside the M6 command. A holdout covariate is the booster trained only on dates before 2025-12-05. The same clocks as M5: `event_time` before 16:00 UTC and `available_at` at or before it.
+- Likelihood, points first: the stat is normal around `beta * xgb_mean + alpha_player`, with a shared `sigma`. `alpha_player` is normal around 0 with scale `tau`. `beta` is normal around 1. A player with no training games keeps `alpha` at 0.
+- Ronnie writes the PyMC model. The harness around it builds the frame, samples, checks diagnostics, scores Brier, and writes the report.
+- First NUTS run is a seeded 40-player subset, points only. It is a diagnostic. It is not the acceptance sample.
+- Reported fit is every player with a legal training row, still points only, still the M5 date cut, headline rest at most 14 days. ADVI may be used while iterating. The reported number is NUTS.
+- Rebounds and assists use the same formula only after the points diagnostics pass.
+- Store `pymc-m6-v1` summaries on the holdout: posterior predictive mean, sd, and 10/50/90. `payload.distribution` is `posterior`. The trace is one NetCDF per prop under `models/`, which is gitignored. `baseline-m3-v1` and `xgb-m5-v1` stay.
+- One command writes `docs/results/m6-posterior.md` and an SVG posterior predictive check.
+- An ADR in `docs/adr.md` records the likelihood and the priors that were actually sampled.
 
 **Considerations:**
-- Plan for sampler slowness. NUTS on a hierarchical model with 50 players and many parameters can take 20-60 minutes per dataset. This is fine for daily prediction (run overnight) but painful for backtesting. Cache aggressively.
-- Posterior predictive checks are the most important diagnostic. If posterior samples don't look like the observed data, something is wrong with the model or priors.
-- This is the milestone where you most need to resist letting AI write the model for you. Type the PyMC code yourself, with the book open. Future-you in interviews will thank present-you.
+- There is no position column. The pool is the player population. Role clusters wait for a column that exists.
+- The daily job still has no game row before tip. The holdout command is the proof. The scheduler stays off.
+- McElreath chapters 1-4 are the reading gate in the original list. The model text stays Ronnie's.
+- A Brier win on the 40-player subset does not close the milestone.
+- MAE is printed next to Brier. A better Brier with a worse MAE is a pass on this milestone. A worse Brier is not, even if the point prediction improved.
+- NUTS on the full points population may take hours. That is acceptable for the reported run. It is not a reason to add parameters.
 
-**Branch points (critical):**
-- *NUTS too slow?* If backtests over a full season take more than a few hours, switch to ADVI (variational inference) for development cycles. Run NUTS for final reported results. Document the tradeoff in an ADR.
-- *R-hat above 1.05?* Simplify the hierarchical structure. Start with single-level random effects, only add complexity once simpler models converge.
-- *Posterior is implausibly wide?* Check prior choices. Weakly informative priors (Half-Normal, Normal with reasonable scale) are usually right; flat priors are usually wrong.
-- *XGBoost integration too strong, masking individual signal?* Down-weight the XGBoost covariate by introducing an explicit weight parameter with a prior. Let the model learn how much to trust XGBoost vs the player-level effect.
+**Branch points:**
+- *Position or role hierarchy?* No. Chosen 2026-11-09. Nothing in the tables defines a cluster.
+- *Fit the hierarchy without the booster?* No. M5 already won the point comparison. M6 starts from that mean.
+- *Quantile regression or a second residual width?* No. That would be another placeholder. The stored probability is the mean of the posterior predictive tail at the line.
+- *ADVI as the published number?* No. ADVI is for iteration. The report's Brier is NUTS, or the milestone stays open.
+- *Wire the nightly sampler?* No. Same reason as M5. A schedule source that exists before tip comes first.
 
 **Acceptance:**
-- Posterior samples stored with each prediction
-- PPC plots look reasonable
-- Diagnostics pass: R-hat < 1.01 for key parameters, ESS > 400
-- Backtest with posteriors beats backtest with point estimates on Brier score
-- An ADR exists in `docs/decisions/` explaining the model design
+- On the M5 holdout, headline rest at most 14 days, the points posterior Brier is lower than the `xgb-m5-v1` residual Brier on the same contracts. The report states the contract count. Fewer contracts than the M5 score, or a fit that is only the 40-player subset, keeps the milestone open.
+- R-hat under 1.01 and ESS above 400 for `beta`, `sigma`, and `tau`, read from the unrounded summary. A non-finite value fails. The sampler reports zero divergences. A posterior predictive plot is in the report, including the mass below zero.
+- `pymc-m6-v1` rows exist for the scored holdout, and the M5 rows are still there.
+- One command reproduces the fit.
+- `docs/adr.md` records the model that was sampled.
 
 ---
 
