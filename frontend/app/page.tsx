@@ -40,15 +40,15 @@ export default function TodayPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Today</h1>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Model probability versus Kalshi yes mid. Gap is model minus mid, in
-            probability points. Not an edge or EV claim.
+          <p className="mt-1 max-w-xl text-sm text-[var(--muted)]">
+            Model P next to Kalshi yes mid. Gap is model minus mid (probability
+            points), not an edge or EV claim.
           </p>
         </div>
-        <label className="text-sm text-zinc-600 dark:text-zinc-400">
+        <label className="text-sm text-[var(--muted)]">
           Slate date
           <select
-            className="mt-1 block w-full min-w-44 rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            className="mt-1 block w-full min-w-44 border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-[var(--foreground)]"
             value={date || comparisonsQuery.data?.date || ""}
             onChange={(e) => setDate(e.target.value)}
           >
@@ -84,13 +84,13 @@ export default function TodayPage() {
 
       {sorted.length > 0 ? (
         <>
-          <p className="text-xs text-zinc-500">
+          <p className="font-mono text-xs text-[var(--muted)]">
             Showing {sorted.length} rows for {comparisonsQuery.data?.date}. As of{" "}
             {comparisonsQuery.data?.as_of}.
           </p>
-          <div className="hidden overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 md:block">
+          <div className="hidden overflow-x-auto border border-[var(--line)] bg-[var(--panel)] md:block">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-zinc-200 bg-zinc-100 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950">
+              <thead className="border-b border-[var(--line)] text-xs uppercase tracking-wide text-[var(--muted)]">
                 <tr>
                   <th className="px-3 py-2 font-medium">Player</th>
                   <th className="px-3 py-2 font-medium">Prop</th>
@@ -106,23 +106,23 @@ export default function TodayPage() {
                 {sorted.map((row) => (
                   <tr
                     key={`${row.player_id}-${row.game_id}-${row.prop_type}-${row.line}`}
-                    className="border-b border-zinc-100 dark:border-zinc-800"
+                    className="border-b border-[var(--line)]"
                   >
                     <td className="px-3 py-2">
                       <Link
                         href={`/players/${row.player_id}?game_id=${row.game_id}&prop_type=${row.prop_type}`}
-                        className="font-medium text-blue-700 hover:underline dark:text-blue-300"
+                        className="font-medium text-[var(--accent)] hover:underline"
                       >
                         {row.player_name}
                       </Link>
                     </td>
                     <td className="px-3 py-2 capitalize">{row.prop_type}</td>
-                    <td className="px-3 py-2">{row.line}</td>
-                    <td className="px-3 py-2">{formatPct(row.model_p)}</td>
-                    <td className="px-3 py-2">{formatPct(row.market_mid)}</td>
-                    <td className="px-3 py-2 font-medium">{formatGap(row.gap)}</td>
+                    <td className="px-3 py-2 tabular">{row.line}</td>
+                    <td className="px-3 py-2 tabular">{formatPct(row.model_p)}</td>
+                    <td className="px-3 py-2 tabular">{formatPct(row.market_mid)}</td>
+                    <td className="px-3 py-2 font-medium tabular">{formatGap(row.gap)}</td>
                     <td className="px-3 py-2 font-mono text-xs">{row.model_version}</td>
-                    <td className="px-3 py-2 text-xs">
+                    <td className="px-3 py-2 text-xs text-[var(--muted)]">
                       {row.low_confidence ? "low confidence" : "—"}
                     </td>
                   </tr>
@@ -136,27 +136,27 @@ export default function TodayPage() {
               <Link
                 key={`${row.player_id}-${row.game_id}-${row.prop_type}-${row.line}-card`}
                 href={`/players/${row.player_id}?game_id=${row.game_id}&prop_type=${row.prop_type}`}
-                className="block rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+                className="block border border-[var(--line)] bg-[var(--panel)] p-4"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-medium">{row.player_name}</p>
-                    <p className="text-sm capitalize text-zinc-500">
+                    <p className="text-sm capitalize text-[var(--muted)]">
                       {row.prop_type} · {row.line}
                     </p>
                   </div>
-                  <p className="text-sm font-semibold">{formatGap(row.gap)}</p>
+                  <p className="text-sm font-semibold tabular">{formatGap(row.gap)}</p>
                 </div>
-                <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+                <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-[var(--muted)]">
                   <div>
                     <dt>Model P</dt>
-                    <dd className="text-zinc-900 dark:text-zinc-100">
+                    <dd className="tabular text-[var(--foreground)]">
                       {formatPct(row.model_p)}
                     </dd>
                   </div>
                   <div>
                     <dt>Mid</dt>
-                    <dd className="text-zinc-900 dark:text-zinc-100">
+                    <dd className="tabular text-[var(--foreground)]">
                       {formatPct(row.market_mid)}
                     </dd>
                   </div>

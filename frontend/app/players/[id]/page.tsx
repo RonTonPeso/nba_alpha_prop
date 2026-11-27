@@ -38,15 +38,15 @@ function PlayerDetailInner() {
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/" className="text-sm text-blue-700 hover:underline dark:text-blue-300">
+        <Link href="/" className="text-sm text-[var(--accent)] hover:underline">
           ← Today
         </Link>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">
           {detailQuery.data?.player_name ?? `Player ${playerId}`}
         </h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Forecast density from the stored mean and std, with the market line
-          marked when available. Not an edge view.
+        <p className="mt-1 max-w-xl text-sm text-[var(--muted)]">
+          Density from the stored mean and std. Market line marked when a quote
+          exists.
         </p>
       </div>
 
@@ -63,12 +63,12 @@ function PlayerDetailInner() {
 
       {detailQuery.data ? (
         <>
-          <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <section className="border border-[var(--line)] bg-[var(--panel)] p-4">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-lg font-medium capitalize">
                 {detailQuery.data.prop_type} forecast
               </h2>
-              <p className="font-mono text-xs text-zinc-500">
+              <p className="font-mono text-xs text-[var(--muted)]">
                 {detailQuery.data.model_version ?? "no forecast"}
                 {detailQuery.data.distribution
                   ? ` · ${detailQuery.data.distribution}`
@@ -81,22 +81,22 @@ function PlayerDetailInner() {
               <>
                 <dl className="mb-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                   <div>
-                    <dt className="text-zinc-500">Mean</dt>
-                    <dd className="font-medium">{detailQuery.data.mean.toFixed(2)}</dd>
+                    <dt className="text-[var(--muted)]">Mean</dt>
+                    <dd className="font-medium tabular">{detailQuery.data.mean.toFixed(2)}</dd>
                   </div>
                   <div>
-                    <dt className="text-zinc-500">Std</dt>
-                    <dd className="font-medium">
+                    <dt className="text-[var(--muted)]">Std</dt>
+                    <dd className="font-medium tabular">
                       {detailQuery.data.std?.toFixed(2) ?? "—"}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-zinc-500">Model P</dt>
-                    <dd className="font-medium">{formatPct(detailQuery.data.model_p)}</dd>
+                    <dt className="text-[var(--muted)]">Model P</dt>
+                    <dd className="font-medium tabular">{formatPct(detailQuery.data.model_p)}</dd>
                   </div>
                   <div>
-                    <dt className="text-zinc-500">Gap vs mid</dt>
-                    <dd className="font-medium">{formatGap(detailQuery.data.gap)}</dd>
+                    <dt className="text-[var(--muted)]">Gap vs mid</dt>
+                    <dd className="font-medium tabular">{formatGap(detailQuery.data.gap)}</dd>
                   </div>
                 </dl>
                 <DensityChart
@@ -109,10 +109,10 @@ function PlayerDetailInner() {
           </section>
 
           <section className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="border border-[var(--line)] bg-[var(--panel)] p-4">
               <h2 className="text-lg font-medium">Top SHAP</h2>
               {detailQuery.data.shap_top5.length === 0 ? (
-                <p className="mt-3 text-sm text-zinc-500">
+                <p className="mt-3 text-sm text-[var(--muted)]">
                   No SHAP payload on this row (common for baseline and posterior).
                 </p>
               ) : (
@@ -120,35 +120,35 @@ function PlayerDetailInner() {
                   {detailQuery.data.shap_top5.map((item) => (
                     <li
                       key={item.feature}
-                      className="flex justify-between gap-3 border-b border-zinc-100 py-1 dark:border-zinc-800"
+                      className="flex justify-between gap-3 border-b border-[var(--line)] py-1"
                     >
                       <span className="font-mono text-xs">{item.feature}</span>
-                      <span>{item.shap.toFixed(3)}</span>
+                      <span className="tabular">{item.shap.toFixed(3)}</span>
                     </li>
                   ))}
                 </ul>
               )}
             </div>
 
-            <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="border border-[var(--line)] bg-[var(--panel)] p-4">
               <h2 className="text-lg font-medium">Recent injury signals</h2>
               {detailQuery.data.injuries.length === 0 ? (
-                <p className="mt-3 text-sm text-zinc-500">
+                <p className="mt-3 text-sm text-[var(--muted)]">
                   No injury signals for this player at the slate clock.
                 </p>
               ) : (
                 <ul className="mt-3 space-y-3 text-sm">
                   {detailQuery.data.injuries.map((inj) => (
-                    <li key={inj.injury_signal_id} className="border-b border-zinc-100 pb-2 dark:border-zinc-800">
+                    <li key={inj.injury_signal_id} className="border-b border-[var(--line)] pb-2">
                       <p className="font-medium capitalize">
                         {inj.claim_type}
                         {inj.severity ? ` · ${inj.severity}` : ""}
                       </p>
-                      <p className="text-xs text-zinc-500">
+                      <p className="font-mono text-xs text-[var(--muted)]">
                         {inj.source} · conf {inj.confidence.toFixed(2)} ·{" "}
                         {new Date(inj.event_time).toLocaleString()}
                       </p>
-                      <p className="mt-1 text-zinc-700 dark:text-zinc-300">{inj.raw_text}</p>
+                      <p className="mt-1 text-[var(--foreground)]">{inj.raw_text}</p>
                     </li>
                   ))}
                 </ul>
@@ -157,9 +157,9 @@ function PlayerDetailInner() {
           </section>
 
           {detailQuery.data.comparisons.length > 0 ? (
-            <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <section className="border border-[var(--line)] bg-[var(--panel)] p-4">
               <h2 className="text-lg font-medium">Comparisons on this slate</h2>
-              <ul className="mt-3 divide-y divide-zinc-100 text-sm dark:divide-zinc-800">
+              <ul className="mt-3 divide-y divide-[var(--line)] text-sm">
                 {detailQuery.data.comparisons.map((row) => (
                   <li
                     key={`${row.prop_type}-${row.line}`}
@@ -168,7 +168,7 @@ function PlayerDetailInner() {
                     <span className="capitalize">
                       {row.prop_type} {row.line}
                     </span>
-                    <span>
+                    <span className="tabular">
                       {formatPct(row.model_p)} vs {formatPct(row.market_mid)} (
                       {formatGap(row.gap)})
                     </span>

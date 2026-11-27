@@ -24,20 +24,20 @@ export function DensityChart({
 }) {
   if (!data.length) {
     return (
-      <p className="text-sm text-zinc-500">No density available for this forecast.</p>
+      <p className="text-sm text-[var(--muted)]">No density available for this forecast.</p>
     );
   }
   return (
     <div className="h-72 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
           <XAxis
             dataKey="x"
             type="number"
             domain={["dataMin", "dataMax"]}
             tickFormatter={(v: number) => v.toFixed(0)}
-            stroke="#71717a"
+            stroke="#78716c"
             fontSize={12}
           />
           <YAxis hide />
@@ -50,17 +50,17 @@ export function DensityChart({
           <Area
             type="monotone"
             dataKey="density"
-            stroke="#18181b"
-            fill="#a1a1aa"
-            fillOpacity={0.35}
+            stroke="#1c1917"
+            fill="#0f766e"
+            fillOpacity={0.25}
             isAnimationActive={false}
           />
           {mean !== null ? (
             <ReferenceLine
               x={mean}
-              stroke="#2563eb"
+              stroke="#0f766e"
               strokeDasharray="4 4"
-              label={{ value: "mean", position: "insideTopLeft", fill: "#2563eb", fontSize: 11 }}
+              label={{ value: "mean", position: "insideTopLeft", fill: "#0f766e", fontSize: 11 }}
             />
           ) : null}
           {marketLine !== null ? (
