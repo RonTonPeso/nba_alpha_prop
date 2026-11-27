@@ -37,9 +37,14 @@ root override; matching that is the smallest change.
   `pnpm-lock.yaml`. Fix that locally (ignore or relocate the lockfile),
   not by reintroducing this Vercel-breaking setting.
 
+## Verified
+
+- Production deploy `dpl_6sDvPaTXzN1TUgj2HRzTGjxgRUnk` for commit
+  `fedcc85` (PR #11) reached `READY` and took the aliases including
+  `nba-alpha-prop.vercel.app`. No ENOENT on
+  `routes-manifest-deterministic.json`.
+
 ## Not verified yet
 
-- A green Vercel production deploy after this push (will show on the next
-  build for `main`).
 - Whether the live app can load comparisons from Railway once the
   frontend is READY again (separate from this packaging failure).
