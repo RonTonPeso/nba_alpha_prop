@@ -123,6 +123,19 @@ contains older opponent / departure cells). Inference same-team filter
 prevents cross-team application; a refit is a follow-up when PHI-wide
 (or league) starter flags justify rewriting the artifact.
 
+### Silent regex fallback (I7)
+
+**Required:** Regex / rule-based classification must not arm the lineup
+trigger (review example: sports-headline `\bout\b`).
+
+**Done:** `REGEX_FALLBACK_MODEL` / `is_regex_fallback_model`; 
+`active_out_player_ids` skips those `classifier_model` values after
+marking `seen` (so they still clear, never arm). Test
+`test_regex_fallback_out_does_not_arm_trigger`.
+
+**Left:** Pipeline still persists regex rows for audit; classify-before
+dedupe and scheduler volume (I8/I9) unchanged.
+
 ## Decisions that held
 
 Training on `START_POSITION`, live trigger from injury signals. Minutes

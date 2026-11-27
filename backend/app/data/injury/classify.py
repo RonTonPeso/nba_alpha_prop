@@ -16,6 +16,14 @@ logger = logging.getLogger(__name__)
 PROMPT_VERSION = "m7-injury-v1"
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 FALLBACK_MODEL = "claude-sonnet-4-5-20250929"
+# Silent offline / API-error path. Stored for audit; must not arm lineup trigger.
+REGEX_FALLBACK_MODEL = "rule-based-m7"
+
+
+def is_regex_fallback_model(classifier_model: str | None) -> bool:
+    model = (classifier_model or "").strip().lower()
+    return model == REGEX_FALLBACK_MODEL or model.startswith("rule-based")
+
 
 CLAIM_TYPES = frozenset(
     {
@@ -124,9 +132,9 @@ def _rule_based_classify(item: RawInjuryItem) -> ClassifiedInjury:
         confidence=confidence,
         source_url=item.source_url,
         raw_text=item.text,
-        classifier_model="rule-based-m7",
+        classifier_model=REGEX_FALLBACK_MODEL,
         prompt_version=PROMPT_VERSION,
-        raw_data={"item": item.raw_data, "mode": "rule_based"},
+        raw_data={"item": item.raw_data, "mode": "regex_fallback"},
     )
 
 

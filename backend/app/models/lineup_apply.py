@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy import desc
 from sqlmodel import Session, select
 
+from app.data.injury.classify import is_regex_fallback_model
 from app.data.starter_backfill import usual_starters_for_team
 from app.db.engine import get_engine
 from app.db.queries import query_injury_signals
@@ -85,6 +86,9 @@ def active_out_player_ids(
             continue
         seen.add(signal.player_id)
         if team_player_ids is not None and signal.player_id not in team_player_ids:
+            continue
+        # Regex / rule fallback is stored for audit but must not arm the trigger.
+        if is_regex_fallback_model(signal.classifier_model):
             continue
         if signal.claim_type in _ACTIVE_CLAIMS and signal.confidence >= 0.5:
             out_ids.append(signal.player_id)

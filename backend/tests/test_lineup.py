@@ -112,6 +112,35 @@ def test_active_out_keeps_newest_out(db_session: Session) -> None:
     assert active_out_player_ids(db_session, as_of=as_of) == [EMBIID_ID]
 
 
+def test_regex_fallback_out_does_not_arm_trigger(db_session: Session) -> None:
+    from app.data.injury.classify import REGEX_FALLBACK_MODEL
+
+    db_session.add(Player(player_id=EMBIID_ID, current_name="Joel Embiid"))
+    db_session.commit()
+    as_of = datetime(2025, 3, 1, 18, 0, tzinfo=UTC)
+    db_session.add(
+        InjurySignal(
+            player_id=EMBIID_ID,
+            player_name_raw="Joel Embiid",
+            claim_type="out",
+            severity=None,
+            expected_games_missed=1.0,
+            source="espn",
+            source_reliability_prior=0.7,
+            confidence=0.7,
+            source_url="https://example.com/regex-out",
+            raw_text="Joel Embiid out vs Knicks",
+            event_time=as_of - timedelta(hours=1),
+            available_at=as_of - timedelta(hours=1),
+            classifier_model=REGEX_FALLBACK_MODEL,
+            prompt_version="m7-injury-v1",
+            raw_data={"mode": "regex_fallback"},
+        )
+    )
+    db_session.commit()
+    assert active_out_player_ids(db_session, as_of=as_of) == []
+
+
 def test_teammate_injured_ids_excludes_opponents() -> None:
     # PHI Maxey beneficiary; Embiid PHI out; Harris listed as opponent out.
     harris_id = 202699
