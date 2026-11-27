@@ -54,6 +54,9 @@ Desktop.ini
 models/*.pkl
 models/*.nc
 models/*.joblib
+# Keep lineup_m7_effects.json trackable; ignore other large artifacts.
+models/*.json
+!models/lineup_m7_effects.json
 
 # Cached upstream responses 
 data/cache/

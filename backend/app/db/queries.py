@@ -10,7 +10,7 @@ from datetime import datetime
 from sqlalchemy import desc  # to make mypy happy
 from sqlmodel import Session, select
 
-from app.db.tables import PlayerGameLog
+from app.db.tables import InjurySignal, PlayerGameLog
 
 
 def query_player_game_logs(
@@ -36,6 +36,31 @@ def query_player_game_logs(
         # col, the runtime descriptor is fine. SQLModel and strict mypy quirk.
         .order_by(desc(PlayerGameLog.event_time))  # type: ignore[arg-type]
     )
+    if limit is not None:
+        statement = statement.limit(limit)
+    return list(session.exec(statement).all())
+
+
+def query_injury_signals(
+    *,
+    as_of: datetime,
+    session: Session,
+    player_id: int | None = None,
+    limit: int | None = None,
+) -> list[InjurySignal]:
+    """Return injury signals known at simulated ``as_of``.
+
+    Filters on ``event_time < as_of`` and ``available_at <= as_of``.
+    Most recent first.
+    """
+    statement = (
+        select(InjurySignal)
+        .where(InjurySignal.event_time < as_of)
+        .where(InjurySignal.available_at <= as_of)
+        .order_by(desc(InjurySignal.event_time))  # type: ignore[arg-type]
+    )
+    if player_id is not None:
+        statement = statement.where(InjurySignal.player_id == player_id)
     if limit is not None:
         statement = statement.limit(limit)
     return list(session.exec(statement).all())

@@ -10,12 +10,19 @@ M3 table: predictions. One row per (player, game, prop, model version).
 prediction_time is when the forecast claims to have been made.
 ingested_at is when this system stored the row.
 
+M7 table: injury_signals. Classified injury claims with event_time
+and available_at. player_game_logs.started is the box-score starter flag.
+
 Fact tables carry event_time (when the fact was true in the world)
 and ingested_at (when this system recorded it). Box scores and game
 results also carry available_at. For a bulk load that is 12:00 UTC
 on the day after game_date. For a live fetch it equals ingested_at.
 
 Feature reads of player_game_logs filter on:
+
+    WHERE event_time < :as_of AND available_at <= :as_of
+
+Injury signals use the same pair:
 
     WHERE event_time < :as_of AND available_at <= :as_of
 
@@ -208,6 +215,10 @@ class PlayerGameLog(SQLModel, table=True):
     free_throws_attempted: int = 0
     plus_minus: int | None = None
 
+    # Null until traditional box-score backfill. True when START_POSITION
+    # was non-empty; False when the player appeared but did not start.
+    started: bool | None = None
+
     raw_data: dict[str, Any] = Field(
         default_factory=dict,
         sa_column=Column(JSONB, nullable=False),
@@ -397,6 +408,60 @@ class KalshiPlayerAlias(SQLModel, table=True):
             server_default=func.now(),
             nullable=False,
         ),
+    )
+
+
+# M7: classified injury claims
+
+
+class InjurySignal(SQLModel, table=True):
+    """One classified injury claim from an official report or RSS item.
+
+    event_time is when the claim was published in the world.
+    available_at is when the scrape made it usable to this system.
+    Feature reads use both clocks; ingested_at is not a feature filter.
+    player_id stays null when name resolution fails.
+    """
+
+    __tablename__ = "injury_signals"
+    __table_args__ = (
+        Index("ix_injury_signals_event_available", "event_time", "available_at"),
+        Index("ix_injury_signals_player_event", "player_id", "event_time"),
+        Index("ix_injury_signals_source_url", "source_url"),
+    )
+
+    injury_signal_id: int | None = Field(default=None, primary_key=True)
+
+    player_id: int | None = Field(default=None, foreign_key="players.player_id")
+    player_name_raw: str
+    claim_type: str
+    severity: str | None = None
+    expected_games_missed: float | None = None
+    source: str
+    source_reliability_prior: float
+    confidence: float
+    source_url: str | None = None
+    raw_text: str
+
+    event_time: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    available_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    ingested_at: datetime = Field(
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+
+    classifier_model: str
+    prompt_version: str
+    raw_data: dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSONB, nullable=False),
     )
 
 
