@@ -1,13 +1,23 @@
-# Build context is the repo root to make sure we include the db migrations
-# Build with this docker build -f backend/Dockerfile -t nba-alpha-prop-backend .
-FROM python:3.14-slim
+# Build context is the repo root so migrations are included.
+# Build: docker build -f backend/Dockerfile -t nba-alpha-prop-backend .
+#
+# python:3.14-slim has no g++ and jpype1 (via nbainjuries) often builds from
+# source there. 3.12 is in the project's requires-python range and has better
+# wheel coverage. g++ covers any remaining native builds; JRE covers tabula.
+FROM python:3.12-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        g++ \
+        default-jre-headless \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install uv from the official image.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 WORKDIR /app
 
-# Install deps first so changes to source dont bust the dep cache.
+# Install deps first so source edits do not bust the dep cache.
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
