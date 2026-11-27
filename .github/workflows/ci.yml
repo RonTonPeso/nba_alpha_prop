@@ -12,6 +12,22 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: nba
+          POSTGRES_PASSWORD: nba
+          POSTGRES_DB: nba_alpha_prop
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nba -d nba_alpha_prop"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://nba:nba@localhost:5432/nba_alpha_prop
     steps:
       - uses: actions/checkout@v4
 
@@ -30,6 +46,9 @@ jobs:
 
       - name: Mypy
         run: uv run mypy app tests
+
+      - name: Migrate schema
+        run: uv run alembic upgrade head
 
       - name: Pytest
         run: uv run pytest -q
