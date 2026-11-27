@@ -63,15 +63,34 @@ From `uv run python -m app.models.lineup_fit` and
 - Stored `lineup-m7-v1` points row for Maxey on game `0042500214`
 - Synthetic `injury_signals` row `synthetic://embiid-out-m7`
 
-### LLM held-out
+### LLM held-out (retracted)
 
-From `docs/results/m7-llm.md`:
+~~From `docs/results/m7-llm.md`: N = 100, joint accuracy 1.000, bar 0.85
+passed, Claude Haiku 4.5, Sonnet fallback not required.~~
 
-- N = 100 frozen rows in `docs/results/m7-llm-heldout.jsonl`
-- Joint accuracy (player + claim_type) = 1.000
-- Bar 0.85, passed
-- Model: Claude Haiku 4.5, prompt `m7-injury-v1`
-- Sonnet fallback was not required
+That report is **invalid**. Do not cite it as LLM accuracy. Roadmap
+acceptance "LLM classification accuracy on a held-out test set is
+documented" is only met as a documented failure of the prior eval, not as
+a passing score.
+
+## What changed after review
+
+**Review:** `docs/reviewer-m5-m7-m8.md` M7 B1 (feedback-fixes, A + retract).
+
+**Required:** Stop advertising held-out Haiku joint accuracy 1.000; the
+set is template-expanded, empty player predictions scored as correct, and
+regex fallback can match without calling Haiku.
+
+**Done:**
+- `docs/results/m7-llm.md` rewritten as INVALID.
+- Companion note on `docs/results/m7-llm-heldout.jsonl`.
+- ADR-5 open question that rested on that score qualified.
+- Local `docs/Roadmap.md` M7 status line retracted.
+- `eval_heldout.py` no longer credits empty player names or regex-only
+  rows as LLM success; unit test covers empty-pred scoring.
+
+**Left:** No rebuilt held-out from real RSS/official items and no new
+Haiku spend on this branch (explicit retract, not rebuild).
 
 ## Decisions that held
 

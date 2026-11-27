@@ -453,4 +453,4 @@ A hard-coded Embiid-out to Maxey points bump was rejected as product behavior.
 ### Open Questions
 
 - Whether a hierarchical Bayesian redistribution with player-specific slopes beats the shrunk mean difference on a later holdout.
-- Whether Sonnet fallback is needed after the held-out Haiku score.
+- Whether Sonnet fallback is needed. The prior open question rested on a held-out Haiku joint accuracy of 1.000; that score is retracted (template eval + empty-name / regex scoring — see `docs/results/m7-llm.md`). Revisit only after a real scraped held-out exists.

@@ -73,3 +73,13 @@ def test_pipeline_stores_signal(db_session: Session) -> None:
     row = db_session.exec(select(InjurySignal)).one()
     assert row.player_id == 203954
     assert row.claim_type == "out"
+
+
+def test_heldout_empty_pred_is_not_player_ok() -> None:
+    from app.data.injury.eval_heldout import is_llm_model, player_match
+
+    assert player_match("Joel Embiid", "") is False
+    assert player_match("Joel Embiid", "Joel Embiid") is True
+    assert player_match("", "Joel Embiid") is False
+    assert is_llm_model("rule-based-m7") is False
+    assert is_llm_model("claude-haiku-4-5-20251001") is True
