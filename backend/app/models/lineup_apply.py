@@ -36,23 +36,25 @@ def active_out_player_ids(
     as_of: datetime,
     team_player_ids: set[int] | None = None,
 ) -> list[int]:
-    """Players with a recent out/doubtful signal under the clocks."""
+    """Players whose newest signal under the clocks is out/doubtful.
+
+    Signals are newest-first. The first row for each player always marks
+    them seen, including available/return/probable, so a later clearing
+    claim overrides an earlier out. Only then do we decide active-out.
+    """
     signals = query_injury_signals(as_of=as_of, session=session, limit=500)
     out_ids: list[int] = []
     seen: set[int] = set()
     for signal in signals:
         if signal.player_id is None:
             continue
-        if signal.claim_type not in _ACTIVE_CLAIMS:
-            continue
-        if signal.confidence < 0.5:
-            continue
-        if team_player_ids is not None and signal.player_id not in team_player_ids:
-            continue
         if signal.player_id in seen:
             continue
         seen.add(signal.player_id)
-        out_ids.append(signal.player_id)
+        if team_player_ids is not None and signal.player_id not in team_player_ids:
+            continue
+        if signal.claim_type in _ACTIVE_CLAIMS and signal.confidence >= 0.5:
+            out_ids.append(signal.player_id)
     return out_ids
 
 

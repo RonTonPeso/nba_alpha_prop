@@ -1,9 +1,14 @@
 """Lineup effect apply and starter flag helpers."""
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from sqlmodel import Session
+
 from app.data.nba import started_from_start_position
+from app.db.tables import InjurySignal, Player
 from app.models.lineup import EMBIID_ID, MAXEY_ID, adjust_mean
+from app.models.lineup_apply import active_out_player_ids
 
 
 def test_started_from_start_position() -> None:
@@ -47,3 +52,61 @@ def test_adjust_mean_teammate_shift() -> None:
     )
     assert mean == 26.5
     assert applied[0]["delta"] == 4.5
+
+
+def test_active_out_cleared_by_later_available(db_session: Session) -> None:
+    """Newest available/return must clear a prior out (seen before status)."""
+    db_session.add(Player(player_id=EMBIID_ID, current_name="Joel Embiid"))
+    db_session.commit()
+    as_of = datetime(2025, 3, 1, 18, 0, tzinfo=UTC)
+    older = as_of - timedelta(days=2)
+    newer = as_of - timedelta(hours=1)
+    for event_time, claim in ((older, "out"), (newer, "available")):
+        db_session.add(
+            InjurySignal(
+                player_id=EMBIID_ID,
+                player_name_raw="Joel Embiid",
+                claim_type=claim,
+                severity=None,
+                expected_games_missed=None,
+                source="espn",
+                source_reliability_prior=0.7,
+                confidence=0.9,
+                source_url=f"https://example.com/{claim}",
+                raw_text=f"Joel Embiid {claim}",
+                event_time=event_time,
+                available_at=event_time,
+                classifier_model="test",
+                prompt_version="test",
+                raw_data={},
+            )
+        )
+    db_session.commit()
+    assert active_out_player_ids(db_session, as_of=as_of) == []
+
+
+def test_active_out_keeps_newest_out(db_session: Session) -> None:
+    db_session.add(Player(player_id=EMBIID_ID, current_name="Joel Embiid"))
+    db_session.commit()
+    as_of = datetime(2025, 3, 1, 18, 0, tzinfo=UTC)
+    db_session.add(
+        InjurySignal(
+            player_id=EMBIID_ID,
+            player_name_raw="Joel Embiid",
+            claim_type="out",
+            severity=None,
+            expected_games_missed=1.0,
+            source="espn",
+            source_reliability_prior=0.7,
+            confidence=0.9,
+            source_url="https://example.com/out-only",
+            raw_text="Joel Embiid out",
+            event_time=as_of - timedelta(hours=2),
+            available_at=as_of - timedelta(hours=2),
+            classifier_model="test",
+            prompt_version="test",
+            raw_data={},
+        )
+    )
+    db_session.commit()
+    assert active_out_player_ids(db_session, as_of=as_of) == [EMBIID_ID]

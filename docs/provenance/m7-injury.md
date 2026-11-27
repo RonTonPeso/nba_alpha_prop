@@ -92,6 +92,18 @@ regex fallback can match without calling Haiku.
 **Left:** No rebuilt held-out from real RSS/official items and no new
 Haiku spend on this branch (explicit retract, not rebuild).
 
+### Stale outs (I1)
+
+**Required:** Mark each player `seen` on their newest signal before
+testing out/doubtful, so available/return clears a prior out.
+
+**Done:** `active_out_player_ids` in `lineup_apply.py` records `seen`
+first; tests `test_active_out_cleared_by_later_available` and
+`test_active_out_keeps_newest_out`.
+
+**Left:** No game-date expiry for old "out tonight" claims (review I1
+second bullet); still limited by `limit=500` only.
+
 ## Decisions that held
 
 Training on `START_POSITION`, live trigger from injury signals. Minutes
