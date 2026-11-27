@@ -16,10 +16,11 @@ from sqlmodel import Session
 
 from app.data.injury.pipeline import run_injury_pipeline
 from app.db.engine import get_engine
+from app.paths import find_repo_root
 
 logger = logging.getLogger(__name__)
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = find_repo_root()
 
 
 def main(argv: list[str] | None = None) -> int:

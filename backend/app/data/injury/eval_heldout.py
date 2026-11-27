@@ -18,10 +18,11 @@ from typing import Any
 
 from app.data.injury.classify import classify_item
 from app.data.injury.sources import RawInjuryItem
+from app.paths import find_repo_root
 
 logger = logging.getLogger(__name__)
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = find_repo_root()
 _DEFAULT_SET = _REPO_ROOT / "docs" / "results" / "m7-llm-heldout.jsonl"
 _DEFAULT_REPORT = _REPO_ROOT / "docs" / "results" / "m7-llm.md"
 

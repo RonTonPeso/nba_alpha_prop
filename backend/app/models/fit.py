@@ -22,7 +22,6 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -60,10 +59,11 @@ from app.models.features import (
     visible_logs,
 )
 from app.models.predict import HISTORY_LIMIT, prediction_time_for
+from app.paths import find_repo_root
 
 logger = logging.getLogger(__name__)
 
-_RESULTS = Path(__file__).resolve().parents[3] / "docs" / "results" / "m5-xgb.md"
+_RESULTS = find_repo_root() / "docs" / "results" / "m5-xgb.md"
 
 
 @dataclass(frozen=True)

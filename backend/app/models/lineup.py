@@ -18,12 +18,13 @@ from sqlmodel import Session, col, select
 
 from app.data.starter_backfill import USUAL_STARTER_MIN_STARTS, USUAL_STARTER_WINDOW
 from app.db.tables import Game, PlayerGameLog
+from app.paths import find_repo_root
 
 logger = logging.getLogger(__name__)
 
 LINEUP_VERSION = "lineup-m7-v1"
 PROP_TYPES = ("points", "rebounds", "assists")
-_ROOT = Path(__file__).resolve().parents[3]
+_ROOT = find_repo_root()
 _DEFAULT_ARTIFACT = _ROOT / "models" / "lineup_m7_effects.json"
 
 # Embiid / Maxey NBA IDs (stable).

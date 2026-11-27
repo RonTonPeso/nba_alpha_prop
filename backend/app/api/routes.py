@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import re
 from datetime import UTC, date, datetime
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -47,11 +46,12 @@ from app.db.tables import (
     PlayerGameLog,
     Prediction,
 )
+from app.paths import find_repo_root
 from app.scheduler import make_scheduler
 
 router = APIRouter(prefix="/api")
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = find_repo_root()
 _RESULTS = _REPO_ROOT / "docs" / "results"
 
 

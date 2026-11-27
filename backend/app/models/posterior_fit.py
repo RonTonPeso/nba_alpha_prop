@@ -55,10 +55,11 @@ from app.models.posterior_model import (
     predictive_summary,
     sample_points,
 )
+from app.paths import find_repo_root
 
 logger = logging.getLogger(__name__)
 
-_ROOT = Path(__file__).resolve().parents[3]
+_ROOT = find_repo_root()
 _RESULTS = _ROOT / "docs" / "results"
 _OOF_FOLDS = 5
 _PPC = {

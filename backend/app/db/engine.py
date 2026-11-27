@@ -2,21 +2,20 @@
 
 DATABASE_URL is read from the environment. In local dev, set it in `.env`
 at the repo root (copy from `.env.example`). In Docker/Railway, it's set
-as a real env var and the .env loader is a no-op.
+as a real env var and the .env loader is a no-op when skipped or absent.
 """
 
 import os
 from collections.abc import Iterator
-from pathlib import Path
 
-from dotenv import load_dotenv
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, create_engine
 
-# Load .env from repo root once at import time. No-op when the var is
-# already set by the surrounding environment.
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-load_dotenv(_REPO_ROOT / ".env")
+from app.paths import load_repo_dotenv
+
+# Load .env once for local DATABASE_URL convenience. Does not override
+# existing process env; set NBA_LOAD_DOTENV=0 to skip.
+load_repo_dotenv()
 
 
 def _normalize_url(url: str) -> str:
