@@ -30,7 +30,7 @@ export function CalibrationChart({ bins }: { bins: Bin[] }) {
 
   if (!data.length) {
     return (
-      <p className="text-sm text-zinc-500">No calibration bins with counts.</p>
+      <p className="text-sm text-[var(--muted)]">No calibration bins with counts.</p>
     );
   }
 
@@ -38,20 +38,20 @@ export function CalibrationChart({ bins }: { bins: Bin[] }) {
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
           <XAxis
             dataKey="predicted"
             type="number"
             domain={[0, 1]}
             tickFormatter={(v: number) => v.toFixed(1)}
-            stroke="#71717a"
+            stroke="#78716c"
             fontSize={12}
           />
           <YAxis
             type="number"
             domain={[0, 1]}
             tickFormatter={(v: number) => v.toFixed(1)}
-            stroke="#71717a"
+            stroke="#78716c"
             fontSize={12}
           />
           <Tooltip
@@ -62,7 +62,7 @@ export function CalibrationChart({ bins }: { bins: Bin[] }) {
           <Line
             type="linear"
             dataKey="perfect"
-            stroke="#a1a1aa"
+            stroke="#a8a29e"
             strokeDasharray="4 4"
             dot={false}
             name="ideal"
@@ -71,7 +71,7 @@ export function CalibrationChart({ bins }: { bins: Bin[] }) {
           <Line
             type="linear"
             dataKey="realized"
-            stroke="#18181b"
+            stroke="#0f766e"
             strokeWidth={2}
             dot={{ r: 3 }}
             name="realized"

@@ -12,12 +12,12 @@ const LINKS = [
 export function Nav() {
   const pathname = usePathname();
   return (
-    <header className="border-b border-zinc-200 bg-zinc-50/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
+    <header className="border-b border-[var(--line)] bg-[var(--panel)]/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <Link href="/" className="text-lg font-semibold tracking-tight">
+        <Link href="/" className="font-mono text-sm font-medium tracking-tight">
           nba_alpha_prop
         </Link>
-        <nav className="flex flex-wrap gap-1 text-sm">
+        <nav className="flex flex-wrap gap-4 text-sm">
           {LINKS.map((link) => {
             const active =
               link.href === "/"
@@ -29,8 +29,8 @@ export function Nav() {
                 href={link.href}
                 className={
                   active
-                    ? "rounded-md bg-zinc-900 px-3 py-1.5 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                    : "rounded-md px-3 py-1.5 text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    ? "border-b-2 border-[var(--accent)] pb-0.5 font-medium text-[var(--foreground)]"
+                    : "border-b-2 border-transparent pb-0.5 text-[var(--muted)] hover:text-[var(--foreground)]"
                 }
               >
                 {link.label}
