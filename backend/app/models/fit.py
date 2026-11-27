@@ -527,11 +527,16 @@ def _store_xgb(
     )
 
 
+def load_examples(session: Session) -> list[Example]:
+    """Every legal player-game under the feature clock. Read only."""
+    logs, team_games = _load(session)
+    return build_examples(logs, team_usage=_team_usage(logs), team_games=team_games)
+
+
 def run(session: Session, *, fraction: float = HOLDOUT_FRACTION) -> str:
     """Fit, score, store the holdout, and return the report text."""
-    logs, team_games = _load(session)
-    logger.info("loaded %d player-games", len(logs))
-    examples = build_examples(logs, team_usage=_team_usage(logs), team_games=team_games)
+    examples = load_examples(session)
+    logger.info("feature rows %d", len(examples))
     if not examples:
         raise RuntimeError("no feature rows were built")
     start = holdout_start((example.game_date for example in examples), fraction)

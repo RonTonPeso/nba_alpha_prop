@@ -5,6 +5,62 @@ Stack-ordered: newest entries pushed onto the top. Scroll down for older work.
 
 ---
 
+# M6 closed for all three props (2026-11-26)
+
+Rebounds: orthogonal censored OOF population. Posterior Brier 0.167559 vs 0.168264 on 6,636 contracts. 1,328 `pymc-m6-v1` rows. Trace `models/m6-rebounds-orthogonal-acceptance.nc`. Report `docs/results/m6-posterior-rebounds.md`.
+
+Assists: free `beta` absorbed on the full population (slope correlation -0.827). Orthogonal lost the subset Brier. Fixed `beta` at 1 cleared the subset and the population: Posterior Brier 0.147770 vs 0.150863 on 5,329 contracts. 1,066 `pymc-m6-v1` rows. Trace `models/m6-assists-fixedbeta-acceptance.nc`. Report `docs/results/m6-posterior-assists.md`.
+
+Points plus rebounds plus assists contracts: 6,913 + 6,636 + 5,329 = 18,878. Scheduler still off. Not committed.
+
+# M6 points posterior closed (2026-11-26)
+
+`uv run python -m app.models.posterior_fit --censored --oof --orthogonal --population --draws 2000 --tune 1000 --chains 4`. Sampling took 1425 seconds. Posterior Brier 0.157591 vs the points residual band 0.158157 on 6,913 contracts. Points MAE 4.588 vs 4.603 on 20,757 player-props. `beta` mean 1.000, ESS 3210.7. `tau` mean 0.974, ESS 1968.4. Mean absolute intercept 0.765. Divergences 0. The intercept slope is constrained to 0. Rows were written afterward by the same command with `--from-trace`: 1,798 `pymc-m6-v1` points rows. `baseline-m3-v1` and `xgb-m5-v1` stayed. Trace `models/m6-points-orthogonal-acceptance.nc`, gitignored. Report `docs/results/m6-posterior.md`. Note `docs/provenance/m6-diagnostic.md`. ADR-4 in `docs/adr.md`. Not committed.
+
+# M6 orthogonal intercept, subset gate passed (2026-11-26)
+
+`uv run python -m app.models.posterior_fit --censored --oof --orthogonal --draws 2000 --tune 1000 --chains 4`. The intercept has no slope on the player's mean booster prediction. Posterior Brier 0.160541 vs residual band 0.163925 on 581 contracts. `beta` mean 0.981, ESS 6415.8. `tau` mean 0.747, ESS 1470.6. Mean absolute intercept 0.558. Divergences 0. The subset gate passed. The milestone stays open. Trace `models/m6-points-orthogonal-oof.nc`, gitignored. Report `docs/results/m6-diagnostic.md`. Note `docs/provenance/m6-diagnostic.md`. Not committed.
+
+# M6 full-population points sample, milestone still open (2026-11-22)
+
+`uv run python -m app.models.posterior_fit --censored --oof --population --draws 2000 --tune 1000 --chains 4`. Sampling took 1936 seconds. 753 players in the likelihood, 66,986 training rows. Posterior Brier 0.156784 vs the points residual band 0.158157 on 6,913 contracts. `beta` ESS 920.5, `sigma` ESS 9958.5, `tau` ESS 1073.8, mean `tau` 1.585. Divergences 0. Correlation of `beta` with the intercept slope -0.864, so the intercepts absorb `beta`. The 18,878 M5 contracts include rebounds and assists. No `pymc-m6-v1` rows. Trace `models/m6-points-acceptance.nc`, gitignored. Report `docs/results/m6-posterior.md`. Note `docs/provenance/m6-diagnostic.md`. Not committed.
+
+# M6 censored out-of-fold, subset gate passed (2026-11-22)
+
+`uv run python -m app.models.posterior_fit --censored --oof --draws 2000 --tune 1000 --chains 4`. Posterior Brier 0.159257 vs residual band 0.163925 on 581 contracts. `beta` ESS 1854.8, mean 0.920. `sigma` ESS 12013.9. `tau` ESS 1676.4, mean 1.266. Divergences 0. Correlation of `beta` with the intercept slope -0.795. The subset gate passed. The milestone stays open. Trace `models/m6-points-censored-oof.nc`, gitignored. Report `docs/results/m6-diagnostic.md`. Note `docs/provenance/m6-diagnostic.md`. Not committed.
+
+# M6 censored normal, subset gate passed (2026-11-22)
+
+`uv run python -m app.models.posterior_fit --censored --draws 2000 --tune 1000 --chains 4`. Normal left-censored at 0, shared width, non-centered intercept, in-sample booster prediction. Posterior Brier 0.160895 vs residual band 0.163925 on 581 contracts. `beta` ESS 3795.8, `sigma` ESS 15699.6, `tau` ESS 2399.5, mean `tau` 0.905. Divergences 0. The subset gate passed. The milestone stays open. Trace `models/m6-points-censored.nc`, gitignored. Report `docs/results/m6-diagnostic.md`. Note `docs/provenance/m6-diagnostic.md`. Not committed.
+
+# M6 out-of-fold check, not a usable win (2026-11-22)
+
+`uv run python -m app.models.posterior_fit --oof --draws 2000 --tune 1000 --chains 4`. Five expanding date blocks. 4,001 of 5,006 subset training rows kept. Posterior Brier 0.163595 vs residual band 0.163925 on 581 contracts. `gamma` mean 0.211, ESS 6633.5. `beta` ESS 119.8, `tau` ESS 122.6, 221 divergences. Correlation of `beta` with the intercept slope -0.855. The full population was not sampled. Trace `models/m6-points-oof.nc`, gitignored. Report `docs/results/m6-diagnostic.md`. Note `docs/provenance/m6-diagnostic.md`. Not committed.
+
+# M6 variance diagnostic, Brier went the wrong way (2026-11-20)
+
+`uv run python -m app.models.posterior_fit --draws 2000 --tune 1000 --chains 4`. Same 40 players. Width is `sigma * exp(gamma * z)`, with `z` the booster mean standardized on the sampler's training rows. `gamma` mean 0.204, R-hat 1.0003, bulk ESS 14690.6, every draw positive. Width about 4.62, 5.67, and 6.95 at one training standard deviation below, at, and above the mean prediction. Subset Brier 0.164872 vs residual band 0.163925 on 581 contracts. One divergence. The full population was not sampled. No prediction rows. Trace `models/m6-points-variance.nc`, gitignored. Report `docs/results/m6-diagnostic.md`. Note `docs/provenance/m6-diagnostic.md`. Not committed.
+
+# M6 non-centered diagnostic, subset gate passed (2026-11-19)
+
+`uv run python -m app.models.posterior_fit --draws 2000 --tune 1000 --chains 4`. Same 40 players and the same priors. The intercept is `tau` times a standard normal. `tau` R-hat 1.0010, bulk ESS 2039.9. Divergences 0. Mean `tau` 0.184. Mean absolute intercept 0.143. Subset Brier 0.163788 vs 0.163925 on 581 contracts. The subset gate passed. The milestone stays open. Trace `models/m6-points-noncentered.nc`, gitignored. The centered trace was left in place. No prediction rows. Report `docs/results/m6-diagnostic.md`. Note `docs/provenance/m6-diagnostic.md`. Not committed.
+
+# M6 longer diagnostic, tau still open (2026-11-12)
+
+`uv run python -m app.models.posterior_fit --draws 2000 --tune 1000 --chains 4`. Same 40 players and the same priors. `beta` R-hat 1.0077, ESS 1076.7. `sigma` R-hat 1.0036, ESS 1723.2. `tau` R-hat 1.1085, ESS 33.8. One divergence. Subset Brier 0.163752 vs 0.163925 on 581 contracts. Correlation of `beta` with the intercept slope is -0.463, so the intercepts are not absorbing `beta`. `tau` mean about 0.20 points. Trace `models/m6-points-diagnostic.nc`, gitignored. No prediction rows. Report `docs/results/m6-diagnostic.md`. Note `docs/provenance/m6-diagnostic.md`. Not committed.
+
+# M6 diagnostic review fixes, no new sample (2026-11-09)
+
+The fresh-session review confirmed the 40-player claims and blocked another sample until the gate could fail a NaN R-hat. The gate now rejects non-finite R-hat and ESS, an ESS of 400, an R-hat of 1.01, and any divergence. ArviZ is asked for the unrounded summary. The predictive histogram keeps the below-zero bin and the overflow bin. The report prints the seed, chains, tune, draws, and target accept of the run it makes. The next default is 4 chains. The 9 Nov sample was not rerun, and its report still says 2 chains with the rounded R-hat. The agent typed the starting likelihood. The in-sample training covariate was left as it is and is now stated. Note `docs/provenance/m6-diagnostic.md`.
+
+# M6 diagnostic, milestone still open (2026-11-09)
+
+`uv run python -m app.models.posterior_fit`. Points only, 40 players, seed 0, 2 chains, 400 tune and 400 draw. Training rows in the subset 5006. Headline holdout rows 1655. Residual width on all training rows 6.002. Subset Brier 0.163713 vs residual band 0.163925 on 581 contracts. Divergences 0. `tau` R-hat 1.090, bulk ESS 28. The gate failed. No prediction rows written. Report `docs/results/m6-diagnostic.md`. Note `docs/provenance/m6-diagnostic.md`. Not committed.
+
+# M6 plan, no model code yet (2026-11-09)
+
+The milestone is a player intercept around the saved or refit `xgb-m5-v1` mean, points first. The Brier bar is the residual band, 0.159651 on 18,878 contracts, not the M3 baseline. No position level, no nightly sampler, no ADVI number in the report. The 40-player NUTS run is a diagnostic. Ronnie writes the PyMC likelihood. The note is `docs/provenance/m6-plan.md`.
+
 # M5 fit (2026-11-07)
 
 `uv run python -m app.models.fit` from `backend/`. Holdout from 2025-12-05. Headline MAE 2.627 vs 2.776 on 62,271 player-props, 993 games, rest at most 14 days. Points, rebounds, and assists each improved. Residual Brier 0.159651 vs 0.168920 on 18,878 contracts. Stored `xgb-m5-v1` rows: 63,552, each with five SHAP values. The command also inserted the missing holdout baseline rows and left the 180 already-stored Finals rows alone. Report `docs/results/m5-xgb.md`. Note `docs/provenance/m5-xgb.md`. Not committed. The daily job was not switched.
