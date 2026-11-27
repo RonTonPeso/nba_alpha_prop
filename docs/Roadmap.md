@@ -372,6 +372,8 @@ There are no features yet. That is the point. Getting deployment unblocked early
 
 ## M8: Dashboard MVP
 
+**Status:** Closed (2026-11-27). Revised acceptance: model-vs-market **gap** (not edge/EV), three views + status, local proof (Railway deferred). FastAPI `/api/comparisons/today`, `/api/players/{id}/detail`, `/api/calibration/summary`, `/api/status` with CORS. Next views Today / player detail (Recharts density) / Calibration / Status. Prefer `lineup-m7-v1` → `pymc-m6-v1` → `xgb-m5-v1` → `baseline-m3-v1`. Provenance `docs/provenance/m8-plan.md`, `m8-dashboard.md`.
+
 **Effort:** ~25-35 hours
 
 **Goal:** Three views are live: today's edges, player detail, and calibration. Mobile-friendly. Loads quickly.

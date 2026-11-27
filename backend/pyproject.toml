@@ -41,6 +41,7 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B"]
+"app/api/routes.py" = ["B008"]
 
 [tool.black]
 line-length = 100
