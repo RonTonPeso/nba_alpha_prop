@@ -16,11 +16,18 @@ remove obvious scaffold tells; personal essay kept gitignored.
 
 ## What landed in this pass
 
+Commits on `m10-polish`:
+
+- `44bb849` m10 docs: short readme, architecture, model card, screenshots
+- `28946ec` m10 ui: typefaces, teal accent, fix next tracing root
+
+Contents:
+
 - Short README with four screenshots under `docs/images/`, links to
   architecture / model card / status / results / provenance
-- Full `docs/architecture.md` (already drafted; kept substantive)
+- Full `docs/architecture.md` (kept substantive for recruiter story)
 - `docs/model_card.md` present
-- `docs/status.md` rewritten for post-M8 / M10-in-progress
+- `docs/status.md` rewritten for post-M8 / M10
 - Frontend visual pass: Source Sans 3 + IBM Plex Mono, teal accent,
   underline nav (no zinc pill chrome), solid panels instead of dashed
   AI empty boxes

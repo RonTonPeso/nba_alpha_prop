@@ -11,7 +11,7 @@ is the short product story. This file is what the code does.
 | M1–M7 | Box scores, Kalshi, baseline, calibration, XGBoost, posteriors, injury + lineup | On `main` |
 | M8 dashboard | Comparison / detail / calibration / status API + Next views | On `main` |
 | M9 alerts | Discord webhooks | Not started (optional) |
-| M10 polish | README, architecture, model card, screenshots, UI pass, secrets check | In progress on `m10-polish` |
+| M10 polish | README, architecture, model card, screenshots, UI pass, secrets check | On `m10-polish` (`44bb849`, `28946ec`); PR / CI / public demo still open |
 
 ## Dashboard (M8)
 
