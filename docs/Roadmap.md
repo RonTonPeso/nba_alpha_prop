@@ -337,7 +337,7 @@ There are no features yet. That is the point. Getting deployment unblocked early
 
 ## M7: Injury LLM Pipeline + Lineup-Conditional Layer
 
-**Status:** Closed (2026-11-27). Starter flags backfilled from `boxscoretraditionalv2` for 358 PHI games (5,888 rows). Usual starter = 6 of prior 10. Lineup effects in `models/lineup_m7_effects.json` (1,296 cells). Embiid→Maxey points delta +3.27; synthetic test lifts Maxey 25.19→28.46 and zeros Embiid. Timed ESPN scrape→Haiku→`injury_signals` in 14.7s (`docs/results/m7-injury-timed.json`). Held-out Haiku joint accuracy 1.000 on 100 (`docs/results/m7-llm.md`). Jobs `injury_official` / `injury_rss` registered; `SCHEDULER_ENABLED` still off. ADR-5. Provenance `docs/provenance/m7-plan.md`, `m7-injury.md`.
+**Status:** Closed (2026-11-27). Starter flags backfilled from `boxscoretraditionalv2` for 358 PHI games (5,888 rows). Usual starter = 6 of prior 10. Lineup effects in `models/lineup_m7_effects.json` (1,296 cells). Embiid→Maxey points delta +3.27; synthetic test lifts Maxey 25.19→28.46 and zeros Embiid. Timed ESPN scrape→Haiku→`injury_signals` in 14.7s (`docs/results/m7-injury-timed.json`). Held-out Haiku joint accuracy 1.000 on 100 is **retracted** (template set + empty-name/regex scoring; see `docs/results/m7-llm.md` INVALID). Jobs `injury_official` / `injury_rss` registered; `SCHEDULER_ENABLED` still off. ADR-5. Provenance `docs/provenance/m7-plan.md`, `m7-injury.md`.
 
 **Effort:** ~25-35 hours
 
