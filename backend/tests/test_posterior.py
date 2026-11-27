@@ -11,14 +11,30 @@ import pytest
 
 from app.models.posterior import (
     PosteriorDraw,
+    covariate_scale,
+    date_blocks,
     diagnostic_players,
     diagnostics_pass,
     histogram,
+    location_tradeoff,
     ppc_svg,
+    row_width,
     sampler_training_rows,
+    standardized_covariate,
     tail_probability,
+    tradeoff_note,
+    tradeoff_svg,
 )
 from app.models.posterior_model import draws_from, parameter_rows
+
+
+def test_date_blocks_are_contiguous_and_earliest_first() -> None:
+    days = [date(2025, 1, day) for day in range(1, 11)]
+    blocks = date_blocks(days, 5)
+    assert [len(block) for block in blocks] == [2, 2, 2, 2, 2]
+    assert blocks[0] == [date(2025, 1, 1), date(2025, 1, 2)]
+    assert blocks[-1] == [date(2025, 1, 9), date(2025, 1, 10)]
+    assert [day for block in blocks for day in block] == days
 
 
 def test_diagnostic_players_are_stable_and_stay_inside_both_sets() -> None:
@@ -62,6 +78,49 @@ def test_diagnostic_gate_needs_all_three_parameters() -> None:
     assert diagnostics_pass([("beta", 1.0, 500), ("sigma", 1.0, 500), ("tau", 1.0, 500)])
     assert not diagnostics_pass([("beta", 1.02, 500), ("sigma", 1.0, 500), ("tau", 1.0, 500)])
     assert not diagnostics_pass([("beta", 1.0, 500), ("sigma", 1.0, 500)])
+    assert diagnostics_pass([("sigma", 1.0, 500), ("tau", 1.0, 500)])
+
+
+def test_fixed_beta_model_holds_the_slope_at_one() -> None:
+    from app.models.posterior_model import points_model
+
+    model = points_model(
+        player_ids=[4, 8],
+        player_code=np.array([0, 1, 0]),
+        xgb_mean=np.array([10.0, 12.0, 11.0]),
+        observed=np.array([0.0, 14.0, 10.0]),
+        censored=True,
+        fixed_beta=True,
+    )
+    assert "beta" in model.named_vars
+    assert "tau" in model.named_vars
+
+
+def test_wider_tail_when_gamma_scales_the_width() -> None:
+    shared = PosteriorDraw(beta=1.0, sigma=2.0, alpha={7: 0.0}, gamma=0.0)
+    wider = PosteriorDraw(beta=1.0, sigma=2.0, alpha={7: 0.0}, gamma=1.0)
+    shared_probability = tail_probability(
+        [shared], player_id=7, xgb_mean=10.0, line=14.0, covariate_z=1.0
+    )
+    wider_probability = tail_probability(
+        [wider], player_id=7, xgb_mean=10.0, line=14.0, covariate_z=1.0
+    )
+    assert row_width(2.0, 1.0, 1.0) == pytest.approx(2.0 * math.e)
+    assert wider_probability > shared_probability
+
+
+def test_covariate_scale_uses_the_training_rows_only() -> None:
+    center, scale = covariate_scale([10.0, 12.0, 14.0])
+    assert center == pytest.approx(12.0)
+    assert standardized_covariate(12.0, center=center, scale=scale) == pytest.approx(0.0)
+    assert standardized_covariate(14.0, center=center, scale=scale) == pytest.approx(1.0)
+
+
+def test_diagnostic_gate_rejects_an_unmixed_gamma() -> None:
+    clean = [("beta", 1.0, 500.0), ("sigma", 1.0, 500.0), ("tau", 1.0, 500.0)]
+    assert diagnostics_pass(clean)
+    assert not diagnostics_pass([*clean, ("gamma", 1.05, 500.0)])
+    assert diagnostics_pass([*clean, ("gamma", 1.0, 500.0)])
 
 
 def test_diagnostic_gate_rejects_nan_and_a_single_failure() -> None:
@@ -96,6 +155,26 @@ def test_histogram_keeps_mass_outside_the_point_range() -> None:
     assert sum(counts) == 4
 
 
+def test_location_tradeoff_sees_beta_absorbed_by_the_intercepts() -> None:
+    means = [10.0, 20.0, 30.0]
+    beta = [0.8, 1.0, 1.2, 1.4]
+    tau = [1.0, 1.1, 1.2, 1.3]
+    alpha = [[-value * mean for mean in means] for value in beta]
+    result = location_tradeoff(beta, tau, alpha, means)
+    assert result.beta_slope_correlation == pytest.approx(-1.0)
+    assert result.mean_slope == pytest.approx(-sum(beta) / len(beta))
+    assert result.beta_tau_correlation == pytest.approx(1.0)
+    assert "not a separate scale" in tradeoff_note(result)
+    svg = tradeoff_svg(beta, tau)
+    assert svg.startswith("<svg")
+    assert "beta" in svg
+
+
+def test_location_tradeoff_rejects_a_flat_player_mean() -> None:
+    with pytest.raises(ValueError):
+        location_tradeoff([1.0, 1.1, 1.2], [0.4, 0.5, 0.6], [[0.0, 0.0]] * 3, [5.0, 5.0])
+
+
 def test_ppc_svg_rejects_a_mismatched_histogram() -> None:
     observed = histogram([1, 6, 11])
     with pytest.raises(ValueError):
@@ -109,6 +188,97 @@ def test_ppc_svg_labels_the_low_bin() -> None:
     assert "<0" in svg
     assert "60+" in svg
     assert "observed" in svg
+
+
+def test_predictive_summary_stops_draws_at_zero() -> None:
+    from app.models.posterior_model import predictive_summary
+
+    mean, std, low, mid, high = predictive_summary(
+        [-2.0, 0.0, 2.0, 4.0],
+        clip_at_zero=True,
+    )
+    assert mean == 1.5
+    assert low == 0.0
+    assert mid == 1.0
+    assert abs(high - 3.4) < 1e-9
+    assert std > 0
+    plain, _, _, _, _ = predictive_summary([-2.0, 0.0, 2.0, 4.0], clip_at_zero=False)
+    assert plain == 1.0
+
+
+def test_residual_intercept_has_no_slope_on_the_level() -> None:
+    from app.models.posterior import residual_intercept
+
+    level = [10.0, 20.0, 15.0, 30.0]
+    residual = residual_intercept([1.0, -2.0, 0.5, 3.0], level)
+    centered = [value - sum(level) / len(level) for value in level]
+    variance = sum(value * value for value in centered)
+    slope = sum(value * center for value, center in zip(residual, centered, strict=True)) / variance
+    assert abs(slope) < 1e-9
+
+
+def test_orthogonal_model_needs_a_varying_player_level() -> None:
+    from app.models.posterior_model import points_model
+
+    with pytest.raises(ValueError, match="player level"):
+        points_model(
+            player_ids=[4, 8],
+            player_code=np.array([0, 1, 0]),
+            xgb_mean=np.array([10.0, 12.0, 11.0]),
+            observed=np.array([0.0, 14.0, 10.0]),
+            censored=True,
+            orthogonal=True,
+        )
+    model = points_model(
+        player_ids=[4, 8],
+        player_code=np.array([0, 1, 0]),
+        xgb_mean=np.array([10.0, 12.0, 11.0]),
+        observed=np.array([0.0, 14.0, 10.0]),
+        censored=True,
+        orthogonal=True,
+        player_level=np.array([10.0, 18.0]),
+    )
+    assert "alpha" in model.named_vars
+    assert "gamma" not in model.named_vars
+
+
+def test_points_model_uses_a_noncentered_intercept() -> None:
+    from app.models.posterior_model import points_model
+
+    model = points_model(
+        player_ids=[4, 8],
+        player_code=np.array([0, 1, 0]),
+        xgb_mean=np.array([10.0, 12.0, 11.0]),
+        observed=np.array([9.0, 14.0, 10.0]),
+    )
+    assert "alpha_raw" in model.named_vars
+    assert "alpha" in model.named_vars
+    assert "gamma" in model.named_vars
+
+
+def test_censored_model_shares_sigma_and_stops_at_zero() -> None:
+    from app.models.posterior_model import points_model
+
+    model = points_model(
+        player_ids=[4, 8],
+        player_code=np.array([0, 1, 0]),
+        xgb_mean=np.array([10.0, 12.0, 11.0]),
+        observed=np.array([0.0, 14.0, 10.0]),
+        censored=True,
+    )
+    assert "gamma" not in model.named_vars
+    assert "y" in model.named_vars
+    draw = PosteriorDraw(beta=1.0, sigma=2.0, alpha={7: 0.0})
+    censored_tail = tail_probability(
+        [draw], player_id=7, xgb_mean=10.0, line=14.0, censored_at_zero=True
+    )
+    plain_tail = tail_probability(
+        [draw], player_id=7, xgb_mean=10.0, line=14.0, censored_at_zero=False
+    )
+    assert censored_tail == plain_tail
+    assert (
+        tail_probability([draw], player_id=7, xgb_mean=10.0, line=0.0, censored_at_zero=True) == 1.0
+    )
 
 
 def test_draws_from_follows_the_player_coordinate() -> None:

@@ -356,3 +356,52 @@ preserves the historical view if we need it.
   `prop_type` value. The schema doesn't preclude them.
 
 ---
+
+## ADR-4: Prop posteriors around the M5 booster
+
+### Status
+
+ADR-4, 2026-11-26. This records the models that were sampled for the M6 close. The agent typed the likelihoods. It is not a claim that the priors were settled by a separate reading.
+
+### Context
+
+M5 stores one residual width around the XGBoost mean. M6 replaces that width with a posterior for one prop at a time. The holdout is the M5 date cut, headline rest at most 14 days, and the booster for a holdout row is trained only on earlier dates.
+
+A free player intercept added to `beta * xgb_mean` was not a separate scale on points or on assists. On the full points population the slope of those intercepts on the player's mean booster prediction correlated with `beta` at -0.864. On the full assists population that correlation was -0.827. The intercepts were a second copy of the slope.
+
+### Decision
+
+- Each prop uses a normal left-censored at 0. A positive observation uses the normal density. A zero uses the probability that the latent normal is at or below 0. The width is one shared `sigma`, half-normal with scale 8. `tau` is half-normal with scale 2. `alpha` is `tau` times a standard normal.
+- Points and rebounds: location is `beta * xgb_mean + alpha`, with `beta` normal mean 1 and standard deviation 0.25, and the slope of `alpha` on the player's mean out-of-fold booster prediction removed.
+- Assists: location is `1 * xgb_mean + alpha`. `beta` is the constant 1. The orthogonal constraint lost the subset Brier on assists, so it is not the stored assists model.
+- The sampler's training covariate is the out-of-fold booster prediction from five expanding date blocks. Holdout rows use the booster trained on every training date. A player with no training intercept keeps `alpha` at 0.
+- The reported fit is NUTS: 4 chains, 1,000 tune, 2,000 draws, target accept 0.9, seed 0. The stored row is the posterior predictive mean, sample standard deviation, and 10/50/90 of the latent draw stopped at 0. `payload.distribution` is `posterior`. `model_version` is `pymc-m6-v1`.
+
+### Consequences
+
+### Positive
+
+- Each prop's posterior Brier on every headline contract of that prop is lower than the M5 residual band on those contracts. The three contract sets are the 18,878 M5 contracts.
+- Points and rebounds keep a free `beta` near 1 without the intercept absorbing it. Assists keeps the booster mean as the location scale.
+- One prediction row per scored player-game can be checked against every line of that prop.
+
+### Negative
+
+- The three props are not the same parameterization. Assists needed a fixed `beta`. Points and rebounds needed the orthogonal intercept.
+- Removing the points intercept slope gave back some of the Brier the unconstrained intercept had won. The unconstrained points Brier was 0.156784. The stored points fit is 0.157591.
+- The free-`beta` assists sample had the better Brier, 0.146534 against the stored 0.147770, and was refused because the intercepts absorbed `beta`.
+
+### Alternatives Considered
+
+Leaving the intercept unconstrained on points was rejected. That sample mixed and had the better Brier, and the intercepts absorbed `beta`.
+
+An orthogonal intercept on assists was rejected. The 40-player subset lost the residual band.
+
+A free `beta` on the full assists population was rejected. The Brier won and the slope correlation was -0.827.
+
+A width that grows with the booster mean was rejected on points. The coefficient was positive and identified, and the out-of-fold sample did not produce a usable posterior.
+
+### Open Questions
+
+- Whether a single parameterization can cover all three props without a prop-specific constraint.
+- Whether Ronnie replaces these priors. A replacement is a new `model_version` and a new sample, not an edit of `pymc-m6-v1`.

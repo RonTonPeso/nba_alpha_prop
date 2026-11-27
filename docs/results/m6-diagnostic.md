@@ -1,42 +1,49 @@
 # M6 points posterior, diagnostic subset
 
-This file is the 9 Nov 2026 run. It was not regenerated after the review.
-The generator now prints the seed, chain count, tune, draws, and target accept of the run it actually made, and it keeps predictive mass below 0. This file is the earlier text.
-
-That run was 40 players, seed 0, 2 chains, 400 tune steps, 400 draws, target accept 0.9.
-The R-hat figures below are ArviZ's default 2-decimal rounding, printed with four digits. `1.0100` is the rounded value 1.01.
-The training covariate was the booster's prediction of the same row it was trained on. Holdout rows used the booster trained only on earlier dates.
-The figure drops every value below 0 and every value at or above 60. It was not redrawn.
-
-This is a seeded 40-player NUTS run. It is not the acceptance fit.
-The milestone stays open.
+This is a seeded 40-player NUTS run.
+It is not the acceptance fit. The milestone stays open.
 
 No prediction row was written.
 `baseline-m3-v1` and `xgb-m5-v1` were not changed.
 
-The booster was refit on every training row before the holdout.
+The holdout booster is trained on every training date and no holdout date.
 The sampler's training rows are the subset only.
 Holdout labels were not used to update a player intercept.
+The player intercept is non-centered. Alpha equals tau times a standard normal.
+The likelihood is a normal left-censored at 0. A positive observation uses the normal density. A zero uses the probability of the latent normal falling at or below 0. The width is the shared sigma. The priors on beta, tau, and sigma are unchanged. For a line above 0, the scored probability is the latent upper tail. The player intercept is the part of the non-centered draw with no slope on that player's mean booster prediction. That slope is zero in every draw, so a correlation of beta with it is not a finding.
+The sampler's booster prediction comes from 5 expanding date blocks inside the training period. Each block is predicted by a booster fit only on earlier blocks. The earliest block is left out. Subset training rows with a prediction: 4001 of 5006. Holdout rows use the booster trained on every training date.
 
 Holdout starts: 2025-12-05.
-Subset players: 40. Seed: 0.
+Subset players: 40. Seed: 0. Chains: 4. Tune: 1000. Draws: 2000. Target accept: 0.9.
 Player ids: 202691, 203937, 203944, 1626192, 1627739, 1628418, 1628991, 1629006, 1629028, 1629599, 1629614, 1629680, 1630171, 1630191, 1630209, 1630552, 1630560, 1630581, 1630590, 1630625, 1631106, 1631120, 1631132, 1641712, 1641731, 1641764, 1641767, 1641809, 1641989, 1642262, 1642272, 1642281, 1642403, 1642404, 1642502, 1642844, 1642845, 1642852, 1642920, 1642948.
-Subset training rows: 5006. Subset headline holdout rows: 1655.
+Subset training rows: 4001. Subset headline holdout rows: 1655.
 M5 residual width, fit on all training rows: 6.002.
 
 Brier is only the headline contracts of this subset.
-A lower number here does not close the milestone.
+A lower number on a subset does not close the milestone.
 Residual-band Brier: 0.163925 on 581 contracts.
-Posterior Brier: 0.163713 on 581 contracts.
+Posterior Brier: 0.160541 on 581 contracts.
 
 Divergences: 0.
-Population parameters:
-- `beta` R-hat 1.0100, bulk ESS 233.0.
-- `sigma` R-hat 1.0000, bulk ESS 412.0.
-- `tau` R-hat 1.0900, bulk ESS 28.0.
-The diagnostic gate on beta, sigma, and tau did not pass.
+Population parameters, unrounded, printed to 4 decimals:
+- `beta` R-hat 1.0005, bulk ESS 6415.8.
+- `sigma` R-hat 1.0005, bulk ESS 13714.5.
+- `tau` R-hat 1.0017, bulk ESS 1470.6.
+The gate reads the unrounded R-hat and ESS. A non-finite value fails. Zero divergences are required.
+The diagnostic gate passed for this subset.
 
 ![Posterior predictive check](m6-diagnostic.svg)
 
 Blue bars are observed points. Amber bars are the mean posterior predictive count.
-Bins are 5 points wide, from 0 up to 60. Values outside that range are absent from this figure.
+The first bin is every value below 0. The last bin is every value at or above 60.
+The bins between them are 5 points wide.
+
+![Beta against tau](m6-diagnostic-tradeoff.svg)
+
+Correlation of beta and tau: 0.085.
+Mean beta: 0.981.
+Mean slope of the player intercepts on the player's mean booster prediction: 0.000.
+Correlation of beta with that slope: nan.
+The correlation of beta with the intercept slope is not defined.
+The trace is `models/m6-points-orthogonal-oof.nc`. That file is gitignored.
+Earlier traces under `models/` are left in place.

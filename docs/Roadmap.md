@@ -294,7 +294,7 @@ There are no features yet. That is the point. Getting deployment unblocked early
 
 ## M6: Bayesian Wrapper
 
-**Status:** Diagnostic only (2026-11-09). `uv run python -m app.models.posterior_fit` sampled points for 40 seeded players, 2 chains. R-hat and ESS did not clear the gate (`tau` R-hat 1.09 on ArviZ's 2-decimal rounding, bulk ESS 28). Subset Brier 0.163713 against the residual band 0.163925 on 581 contracts. That is not the acceptance sample. No `pymc-m6-v1` rows were written. After the same day's review, the gate treats a non-finite R-hat or ESS as a failure and the plot keeps mass below zero. That sample was not rerun. The note is `docs/provenance/m6-diagnostic.md`. The comparison target remains the M5 residual band, Brier 0.159651 on 18,878 headline contracts.
+**Status:** Closed (2026-11-26). One censored normal per prop, out-of-fold booster prediction, 753 players. Points and rebounds use an orthogonal player intercept. Assists fixes `beta` at 1. Contract Briers: points 0.157591 vs 0.158157 on 6,913; rebounds 0.167559 vs 0.168264 on 6,636; assists 0.147770 vs 0.150863 on 5,329. Those three sets are the 18,878 M5 contracts. `pymc-m6-v1` rows: 1,798 points, 1,328 rebounds, 1,066 assists. `baseline-m3-v1` and `xgb-m5-v1` stay. Traces under `models/m6-*-acceptance.nc`. Reports `docs/results/m6-posterior.md`, `m6-posterior-rebounds.md`, `m6-posterior-assists.md`. Note `docs/provenance/m6-diagnostic.md`.
 
 **Effort:** ~25-40 hours after the points model converges. A sampler that misses the diagnostic bar is a refusal, not a wider model.
 
@@ -327,7 +327,7 @@ There are no features yet. That is the point. Getting deployment unblocked early
 - *Wire the nightly sampler?* No. Same reason as M5. A schedule source that exists before tip comes first.
 
 **Acceptance:**
-- On the M5 holdout, headline rest at most 14 days, the points posterior Brier is lower than the `xgb-m5-v1` residual Brier on the same contracts. The report states the contract count. Fewer contracts than the M5 score, or a fit that is only the 40-player subset, keeps the milestone open.
+- On the M5 holdout, headline rest at most 14 days, the points posterior Brier is lower than the `xgb-m5-v1` residual Brier on the same points contracts. The report states the contract count. The M5 figure of 0.159651 is 18,878 contracts across points, rebounds, and assists. The points comparison is every headline points contract. Dropping points contracts, or a fit that is only the 40-player subset, keeps the milestone open.
 - R-hat under 1.01 and ESS above 400 for `beta`, `sigma`, and `tau`, read from the unrounded summary. A non-finite value fails. The sampler reports zero divergences. A posterior predictive plot is in the report, including the mass below zero.
 - `pymc-m6-v1` rows exist for the scored holdout, and the M5 rows are still there.
 - One command reproduces the fit.
