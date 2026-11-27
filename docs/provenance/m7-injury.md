@@ -104,6 +104,25 @@ first; tests `test_active_out_cleared_by_later_available` and
 **Left:** No game-date expiry for old "out tonight" claims (review I1
 second bullet); still limited by `limit=500` only.
 
+### Teammates only (I2 + light I3)
+
+**Required:** Do not treat opposing-team outs as teammate effects; prefer
+usual-starter check at inference; reduce departure / sparse-opponent
+label noise in the fit.
+
+**Done:**
+- `teammate_injured_ids` + `apply_lineup_for_game` keep outs on the
+  beneficiary's team and require usual-starter (or self-out).
+- Fit: "out" labels require the player on tonight's team log (`appeared`);
+  team timelines with fewer than 20 flagged games are skipped.
+- Unit tests: `test_teammate_injured_ids_excludes_opponents`,
+  `test_teammate_injured_ids_requires_usual_starter`.
+
+**Left:** Did not regenerate `models/lineup_m7_effects.json` (still
+contains older opponent / departure cells). Inference same-team filter
+prevents cross-team application; a refit is a follow-up when PHI-wide
+(or league) starter flags justify rewriting the artifact.
+
 ## Decisions that held
 
 Training on `START_POSITION`, live trigger from injury signals. Minutes

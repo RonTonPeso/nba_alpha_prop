@@ -104,6 +104,10 @@ def fit_lineup_effects(
     out_vals: dict[tuple[int, int, str], list[float]] = defaultdict(list)
     in_vals: dict[tuple[int, int, str], list[float]] = defaultdict(list)
 
+    # Sparse opponent timelines (e.g. only games vs a PHI-only backfill) are
+    # not enough history to estimate teammate effects; skip them.
+    min_team_games = 20
+
     for _team_id, game_map in by_team_game.items():
         # Chronological team games that have starter flags.
         ordered: list[tuple[datetime, str, list[PlayerGameLog]]] = []
@@ -113,6 +117,8 @@ def fit_lineup_effects(
                 continue
             ordered.append((game.event_time, game_id, rows))
         ordered.sort(key=lambda t: t[0])
+        if len(ordered) < min_team_games:
+            continue
 
         # Build newest-first started maps after each game for usual-starter lookback.
         started_history: list[tuple[str, dict[int, bool]]] = []
@@ -126,7 +132,9 @@ def fit_lineup_effects(
             )
             appeared = {r.player_id for r in rows}
             started_ids = {r.player_id for r in rows if r.started}
-            out_ids = {pid for pid in usual if pid not in started_ids}
+            # Require the player on tonight's team log so traded/departed
+            # usual starters are not labeled "out" for several games after leaving.
+            out_ids = {pid for pid in usual if pid not in started_ids and pid in appeared}
 
             playing = [r for r in rows if r.minutes is not None and r.minutes > 0]
             for injured_id in out_ids:
@@ -143,7 +151,6 @@ def fit_lineup_effects(
                         in_vals[(injured_id, row.player_id, prop)].append(_stat_for(row, prop))
 
             started_history.append((game_id, started_map))
-            _ = appeared  # clarity: absence already covered via out_ids
 
     effects: dict[str, dict[str, Any]] = {}
     for key, outs in out_vals.items():

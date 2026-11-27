@@ -14,9 +14,10 @@ from typing import Any
 from sqlalchemy import desc
 from sqlmodel import Session, select
 
+from app.data.starter_backfill import usual_starters_for_team
 from app.db.engine import get_engine
 from app.db.queries import query_injury_signals
-from app.db.tables import Player, Prediction
+from app.db.tables import Player, PlayerGameLog, Prediction
 from app.models.lineup import (
     EMBIID_ID,
     LINEUP_VERSION,
@@ -28,6 +29,38 @@ from app.models.lineup import (
 logger = logging.getLogger(__name__)
 
 _ACTIVE_CLAIMS = frozenset({"out", "doubtful"})
+
+
+def player_team_ids_for_game(session: Session, game_id: str) -> dict[int, int]:
+    """Map player_id -> team_id for rows logged in ``game_id``."""
+    rows = session.exec(
+        select(PlayerGameLog.player_id, PlayerGameLog.team_id).where(
+            PlayerGameLog.game_id == game_id
+        )
+    ).all()
+    return {int(player_id): int(team_id) for player_id, team_id in rows}
+
+
+def teammate_injured_ids(
+    active_out_ids: list[int],
+    *,
+    beneficiary_id: int,
+    player_teams: dict[int, int],
+    usual_starter_ids: set[int],
+) -> list[int]:
+    """Keep outs that share the beneficiary's team and are usual starters (or self)."""
+    team_id = player_teams.get(beneficiary_id)
+    if team_id is None:
+        return []
+    teammates = {pid for pid, tid in player_teams.items() if tid == team_id}
+    injured: list[int] = []
+    for pid in active_out_ids:
+        if pid not in teammates:
+            continue
+        if pid != beneficiary_id and pid not in usual_starter_ids:
+            continue
+        injured.append(pid)
+    return injured
 
 
 def active_out_player_ids(
@@ -134,10 +167,37 @@ def apply_lineup_for_game(
     )
     if not bases:
         return 0
-    team_players = {row.player_id for row in bases}
-    injured = active_out_player_ids(session, as_of=as_of, team_player_ids=team_players)
+    player_teams = player_team_ids_for_game(session, game_id)
+    # Predictions can exist before tonight's logs; fall back to each player's
+    # most recent team_id under the clocks.
+    for base in bases:
+        if base.player_id in player_teams:
+            continue
+        recent = session.exec(
+            select(PlayerGameLog.team_id)
+            .where(PlayerGameLog.player_id == base.player_id)
+            .where(PlayerGameLog.event_time < as_of)
+            .where(PlayerGameLog.available_at <= as_of)
+            .order_by(desc(PlayerGameLog.event_time))  # type: ignore[arg-type]
+        ).first()
+        if recent is not None:
+            player_teams[base.player_id] = int(recent)
+
+    active = active_out_player_ids(session, as_of=as_of)
+    usual_cache: dict[int, set[int]] = {}
     written = 0
     for base in bases:
+        team_id = player_teams.get(base.player_id)
+        if team_id is None:
+            continue
+        if team_id not in usual_cache:
+            usual_cache[team_id] = usual_starters_for_team(session, team_id=team_id, as_of=as_of)
+        injured = teammate_injured_ids(
+            active,
+            beneficiary_id=base.player_id,
+            player_teams=player_teams,
+            usual_starter_ids=usual_cache[team_id],
+        )
         row = apply_to_base_prediction(
             session,
             base=base,

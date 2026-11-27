@@ -8,7 +8,7 @@ from sqlmodel import Session
 from app.data.nba import started_from_start_position
 from app.db.tables import InjurySignal, Player
 from app.models.lineup import EMBIID_ID, MAXEY_ID, adjust_mean
-from app.models.lineup_apply import active_out_player_ids
+from app.models.lineup_apply import active_out_player_ids, teammate_injured_ids
 
 
 def test_started_from_start_position() -> None:
@@ -110,3 +110,33 @@ def test_active_out_keeps_newest_out(db_session: Session) -> None:
     )
     db_session.commit()
     assert active_out_player_ids(db_session, as_of=as_of) == [EMBIID_ID]
+
+
+def test_teammate_injured_ids_excludes_opponents() -> None:
+    # PHI Maxey beneficiary; Embiid PHI out; Harris listed as opponent out.
+    harris_id = 202699
+    player_teams = {
+        MAXEY_ID: 1610612755,
+        EMBIID_ID: 1610612755,
+        harris_id: 1610612743,  # other team
+    }
+    usual = {EMBIID_ID, MAXEY_ID}
+    injured = teammate_injured_ids(
+        [EMBIID_ID, harris_id],
+        beneficiary_id=MAXEY_ID,
+        player_teams=player_teams,
+        usual_starter_ids=usual,
+    )
+    assert injured == [EMBIID_ID]
+
+
+def test_teammate_injured_ids_requires_usual_starter() -> None:
+    bench_id = 999001
+    player_teams = {MAXEY_ID: 1610612755, bench_id: 1610612755}
+    injured = teammate_injured_ids(
+        [bench_id],
+        beneficiary_id=MAXEY_ID,
+        player_teams=player_teams,
+        usual_starter_ids={MAXEY_ID},
+    )
+    assert injured == []
