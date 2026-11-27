@@ -405,3 +405,52 @@ A width that grows with the booster mean was rejected on points. The coefficient
 
 - Whether a single parameterization can cover all three props without a prop-specific constraint.
 - Whether Ronnie replaces these priors. A replacement is a new `model_version` and a new sample, not an edit of `pymc-m6-v1`.
+
+---
+
+## ADR-5: Lineup redistribution from starter flags, injury as trigger
+
+### Status
+
+ADR-5, 2026-11-27. M7 close record for the lineup-conditional layer.
+
+### Context
+
+Injury news arrives before tip. Box scores arrive after. The lineup layer needs historical games where a usual starter was missing so teammate counting-stat means can shift when a live claim says that starter is out.
+
+`LeagueGameLog` rows do not carry who started. Traditional box scores expose `START_POSITION`.
+
+### Decision
+
+- Backfill `player_game_logs.started` from `boxscoretraditionalv2` `START_POSITION`. Non-empty means started. Null means not yet backfilled.
+- A usual starter is a player who started in at least 6 of the prior 10 team games under the feature clocks.
+- Fit one shrunk mean difference per `(injured_id, beneficiary_id, prop)`: mean(stat | injured usual starter out) minus mean(stat | injured started), shrunk toward 0 with weight `n_out / (n_out + 8)`.
+- Persist effects as `models/lineup_m7_effects.json`. Store adjusted forecasts as `lineup-m7-v1` beside existing model versions. Do not overwrite them.
+- Live trigger is `injury_signals` with `claim_type` in `{out, doubtful}` and confidence at least 0.5. Classification uses Claude Haiku 4.5 (`m7-injury-v1` prompt). Official reports use `nbainjuries`; ESPN and Bleacher Report use RSS.
+- Feature reads of `injury_signals` filter `event_time < as_of` and `available_at <= as_of`.
+
+### Consequences
+
+### Positive
+
+- Training labels match box-score starters. Inference matches the news the system scrapes.
+- The Embiid to Maxey synthetic test asserts a fitted positive points lift, not a hand-tuned constant.
+
+### Negative
+
+- Starter backfill is one HTTP call per game and depends on `stats.nba.com`.
+- `nbainjuries` needs Java for PDF table extraction. RSS can still prove scrape to store when an official PDF is missing.
+- Daily production predictions stay on `baseline-m3-v1` until a reliable pre-tip `Game` path exists.
+
+### Alternatives Considered
+
+Top-5 minutes as the starter label was rejected for the published model. It is circular with the outcome.
+
+Training only on injury-report archives was rejected. Report history is messier than box scores for "starter was out."
+
+A hard-coded Embiid-out to Maxey points bump was rejected as product behavior.
+
+### Open Questions
+
+- Whether a hierarchical Bayesian redistribution with player-specific slopes beats the shrunk mean difference on a later holdout.
+- Whether Sonnet fallback is needed after the held-out Haiku score.

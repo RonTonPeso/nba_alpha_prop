@@ -16,6 +16,7 @@ from app.db.engine import get_engine
 from app.db.tables import (
     Game,
     GameResult,
+    InjurySignal,
     KalshiPlayerAlias,
     Market,
     MarketSettlement,
@@ -57,6 +58,7 @@ def db_session(db_engine: Engine) -> Iterator[Session]:
     # and are undone by the rollback in the finally block below.
     for table in (
         Prediction,
+        InjurySignal,
         MarketSnapshot,
         MarketSettlement,
         Market,

@@ -86,6 +86,48 @@ def _event_time_from_game_date(game_date: str) -> datetime:
     return datetime(d.year, d.month, d.day, tzinfo=UTC) + timedelta(days=1)
 
 
+def fetch_box_score_traditional(
+    client: CachedHttpClient,
+    *,
+    game_id: str,
+    ttl: timedelta | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch ``boxscoretraditionalv2`` player rows for one game.
+
+    Returns the PlayerStats result set. ``START_POSITION`` is non-empty
+    for starters and empty for bench players who appeared.
+    """
+    params: dict[str, Any] = {
+        "GameID": game_id,
+        "EndPeriod": "0",
+        "EndRange": "0",
+        "RangeType": "0",
+        "StartPeriod": "0",
+        "StartRange": "0",
+    }
+    body = client.get(
+        f"{_NBA_STATS_BASE}/boxscoretraditionalv2",
+        params=params,
+        headers=_NBA_HEADERS,
+        ttl=ttl,
+    )
+    # PlayerStats is usually index 0; fall back if the name differs.
+    result_sets = body.get("resultSets") or []
+    for index, rs in enumerate(result_sets):
+        if rs.get("name") == "PlayerStats":
+            return _parse_result_set(body, index)
+    if not result_sets:
+        return []
+    return _parse_result_set(body, 0)
+
+
+def started_from_start_position(raw: Any) -> bool:
+    """Non-empty ``START_POSITION`` means the player started."""
+    if raw is None:
+        return False
+    return str(raw).strip() != ""
+
+
 def fetch_league_game_log(
     client: CachedHttpClient,
     *,

@@ -10,6 +10,7 @@ dependencies = [
     "fastapi>=0.136.1",
     "httpx>=0.28.1",
     "nba-api>=1.7",
+    "nbainjuries>=1.1.1",
     "psycopg[binary]>=3.3.4",
     "pymc>=5.25.1",
     "python-dotenv>=1.2.2",

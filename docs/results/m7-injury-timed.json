@@ -1,0 +1,13 @@
+{
+  "scraped": 10,
+  "classified": 9,
+  "inserted": 9,
+  "skipped_duplicate": 0,
+  "unresolved_player": 0,
+  "seconds": 14.665481084026396,
+  "errors": [
+    "Extra data: line 8 column 1 (char 123)"
+  ],
+  "finished_at": "2026-11-27T01:28:40",
+  "under_300s": true
+}
