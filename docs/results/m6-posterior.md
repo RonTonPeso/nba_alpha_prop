@@ -24,7 +24,7 @@ The M5 figure of 0.159651 is 18878 contracts across points, rebounds, and assist
 Residual-band Brier: 0.158157 on 6913 contracts.
 Posterior Brier: 0.157591 on 6913 contracts.
 Points MAE, XGBoost clipped mean: 4.603 on 20757 player-props.
-Points MAE, posterior predictive mean: 4.588 on 20757 player-props.
+Points MAE, posterior predictive mean: 4.678 on 20757 player-props.
 
 Divergences: 0.
 Population parameters, unrounded, printed to 4 decimals:
@@ -38,7 +38,7 @@ The gate passed.
 
 Blue bars are observed points. Amber bars are the mean posterior predictive count.
 The first bin is every value below 0. The last bin is every value at or above 60.
-The bins between them are 5 points wide.
+The bins between them are 5 wide.
 
 ![Beta against tau](m6-posterior-tradeoff.svg)
 

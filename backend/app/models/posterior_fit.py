@@ -317,15 +317,28 @@ def render_report(
     return "\n".join(lines)
 
 
-def _latent_draws(
+def _predictive_draws(
     center: float,
+    *,
     beta: Any,
     alpha: Any,
+    sigma: Any,
+    gamma: Any,
     slot: int | None,
+    covariate_z: float,
+    rng: np.random.Generator,
 ) -> Any:
-    if slot is None:
-        return beta * center
-    return beta * center + alpha[:, slot]
+    """One observation draw per posterior sample: y ~ N(mu, width).
+
+    ``mu`` is ``beta * center + alpha``. ``width`` is
+    ``sigma * exp(gamma * z)``. This is the posterior predictive the
+    dashboard and stored rows need. The location alone is not.
+    """
+    mu = beta * center
+    if slot is not None:
+        mu = mu + alpha[:, slot]
+    width = np.maximum(sigma * np.exp(gamma * covariate_z), 1e-3)
+    return rng.normal(mu, width)
 
 
 def _point_mae(
@@ -335,19 +348,34 @@ def _point_mae(
     hold_mean: dict[int, float],
     beta: Any,
     alpha: Any,
+    sigma: Any,
+    gamma: Any,
     ordered_ids: list[int],
     clip_at_zero: bool,
+    z_center: float,
+    z_scale: float,
+    seed: int,
 ) -> tuple[float | None, float | None]:
     """MAE of the predictive mean and of the clipped booster mean."""
     if not examples:
         return None, None
     index = {player_id: slot for slot, player_id in enumerate(ordered_ids)}
+    rng = np.random.default_rng(seed)
     posterior_error = 0.0
     residual_error = 0.0
     for example in examples:
         center = hold_mean[id(example)]
         summary = predictive_summary(
-            _latent_draws(center, beta, alpha, index.get(example.player_id)),
+            _predictive_draws(
+                center,
+                beta=beta,
+                alpha=alpha,
+                sigma=sigma,
+                gamma=gamma,
+                slot=index.get(example.player_id),
+                covariate_z=standardized_covariate(center, center=z_center, scale=z_scale),
+                rng=rng,
+            ),
             clip_at_zero=clip_at_zero,
         )
         actual = float(example.actual[prop_index])
@@ -365,48 +393,91 @@ def _store_posterior(
     hold_mean: dict[int, float],
     beta: Any,
     alpha: Any,
+    sigma: Any,
+    gamma: Any,
     ordered_ids: list[int],
     clip_at_zero: bool,
     orthogonal: bool,
+    z_center: float,
+    z_scale: float,
+    seed: int,
+    replace: bool = False,
 ) -> int:
-    """Write one row per scored holdout player-game. Existing rows stay."""
+    """Write one row per scored holdout player-game.
+
+    Existing rows stay unless ``replace`` is true, in which case mean/std
+    and quantiles are rewritten in place (used to fix mean-only rows).
+    """
+    from sqlmodel import select
+
     from app.db.tables import Prediction
     from app.models.fit import _existing
     from app.models.predict import prediction_time_for
 
     existing = _existing(session, POSTERIOR_VERSION)
     index = {player_id: slot for slot, player_id in enumerate(ordered_ids)}
+    rng = np.random.default_rng(seed)
     written = 0
     for example in examples:
         ident = (example.player_id, example.game_id, prop_type)
-        if ident in existing:
-            continue
         center = hold_mean[id(example)]
         mean, std, low, mid, high = predictive_summary(
-            _latent_draws(center, beta, alpha, index.get(example.player_id)),
+            _predictive_draws(
+                center,
+                beta=beta,
+                alpha=alpha,
+                sigma=sigma,
+                gamma=gamma,
+                slot=index.get(example.player_id),
+                covariate_z=standardized_covariate(center, center=z_center, scale=z_scale),
+                rng=rng,
+            ),
             clip_at_zero=clip_at_zero,
         )
-        session.add(
-            Prediction(
-                player_id=example.player_id,
-                game_id=example.game_id,
-                prop_type=prop_type,
-                model_version=POSTERIOR_VERSION,
-                prediction_time=prediction_time_for(example.game_date),
-                mean=mean,
-                std=std,
-                quantile_10=low,
-                quantile_50=mid,
-                quantile_90=high,
-                n_games=example.n_games,
-                low_confidence=not in_headline(example.rest_days),
-                payload={
-                    "distribution": "posterior",
-                    "censored_at_zero": clip_at_zero,
-                    "orthogonal_intercept": orthogonal,
-                },
+        payload = {
+            "distribution": "posterior",
+            "censored_at_zero": clip_at_zero,
+            "orthogonal_intercept": orthogonal,
+            "predictive": "observation",
+        }
+        if ident in existing:
+            if not replace:
+                continue
+            row = session.exec(
+                select(Prediction).where(
+                    Prediction.player_id == example.player_id,
+                    Prediction.game_id == example.game_id,
+                    Prediction.prop_type == prop_type,
+                    Prediction.model_version == POSTERIOR_VERSION,
+                )
+            ).one()
+            row.mean = mean
+            row.std = std
+            row.quantile_10 = low
+            row.quantile_50 = mid
+            row.quantile_90 = high
+            row.n_games = example.n_games
+            row.low_confidence = not in_headline(example.rest_days)
+            row.payload = payload
+            session.add(row)
+        else:
+            session.add(
+                Prediction(
+                    player_id=example.player_id,
+                    game_id=example.game_id,
+                    prop_type=prop_type,
+                    model_version=POSTERIOR_VERSION,
+                    prediction_time=prediction_time_for(example.game_date),
+                    mean=mean,
+                    std=std,
+                    quantile_10=low,
+                    quantile_50=mid,
+                    quantile_90=high,
+                    n_games=example.n_games,
+                    low_confidence=not in_headline(example.rest_days),
+                    payload=payload,
+                )
             )
-        )
         written += 1
     if written:
         session.commit()
@@ -428,11 +499,13 @@ def run(
     orthogonal: bool = False,
     fixed_beta: bool = False,
     trace_in: Path | None = None,
+    rewrite_stored: bool = False,
 ) -> tuple[str, str, str]:
     """Return the report text, the predictive SVG, and the beta-tau SVG.
 
     Writes a gitignored trace. Writes ``pymc-m6-v1`` rows only when the
     acceptance bar clears. Earlier traces are left in place.
+    ``rewrite_stored`` updates existing rows' predictive summaries in place.
     """
     prop_index = _prop_index(prop_type)
     ppc_upper, ppc_width = _PPC[prop_type]
@@ -675,8 +748,13 @@ def run(
         hold_mean=hold_mean,
         beta=beta,
         alpha=alpha,
+        sigma=sigma,
+        gamma=gamma,
         ordered_ids=ordered_ids,
         clip_at_zero=censored,
+        z_center=z_center,
+        z_scale=z_scale,
+        seed=seed,
     )
     rows_written = 0
     if (
@@ -696,9 +774,15 @@ def run(
             hold_mean=hold_mean,
             beta=beta,
             alpha=alpha,
+            sigma=sigma,
+            gamma=gamma,
             ordered_ids=ordered_ids,
             clip_at_zero=True,
             orthogonal=orthogonal,
+            z_center=z_center,
+            z_scale=z_scale,
+            seed=seed,
+            replace=rewrite_stored,
         )
     report = render_report(
         holdout_on=start.isoformat(),
@@ -782,9 +866,20 @@ def main() -> None:
         default=None,
         help="Score and, when the bar clears, store rows from this NetCDF. Does not resample.",
     )
+    parser.add_argument(
+        "--rewrite-stored",
+        action="store_true",
+        help=(
+            "When writing pymc-m6-v1 rows, update existing rows' predictive "
+            "summaries in place (mean/std/quantiles). Use after fixing "
+            "mean-only storage."
+        ),
+    )
     args = parser.parse_args()
     if args.population and not (args.censored and args.oof):
         parser.error("--population runs the censored out-of-fold likelihood")
+    if args.rewrite_stored and not args.population:
+        parser.error("--rewrite-stored only applies to an acceptance (--population) write")
     from app.db.engine import get_engine
 
     with Session(get_engine()) as session:
@@ -802,6 +897,7 @@ def main() -> None:
             orthogonal=args.orthogonal,
             fixed_beta=args.fixed_beta,
             trace_in=args.from_trace,
+            rewrite_stored=args.rewrite_stored,
         )
     _RESULTS.mkdir(parents=True, exist_ok=True)
     stem = _result_stem(prop_type=args.prop, acceptance=args.population)

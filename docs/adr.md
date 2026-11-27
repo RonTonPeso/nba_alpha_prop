@@ -375,7 +375,7 @@ A free player intercept added to `beta * xgb_mean` was not a separate scale on p
 - Points and rebounds: location is `beta * xgb_mean + alpha`, with `beta` normal mean 1 and standard deviation 0.25, and the slope of `alpha` on the player's mean out-of-fold booster prediction removed.
 - Assists: location is `1 * xgb_mean + alpha`. `beta` is the constant 1. The orthogonal constraint lost the subset Brier on assists, so it is not the stored assists model.
 - The sampler's training covariate is the out-of-fold booster prediction from five expanding date blocks. Holdout rows use the booster trained on every training date. A player with no training intercept keeps `alpha` at 0.
-- The reported fit is NUTS: 4 chains, 1,000 tune, 2,000 draws, target accept 0.9, seed 0. The stored row is the posterior predictive mean, sample standard deviation, and 10/50/90 of the latent draw stopped at 0. `payload.distribution` is `posterior`. `model_version` is `pymc-m6-v1`.
+- The reported fit is NUTS: 4 chains, 1,000 tune, 2,000 draws, target accept 0.9, seed 0. The stored row is the posterior predictive mean, sample standard deviation, and 10/50/90 of an observation draw `y ~ N(mu, sigma)` (shared width; gamma form when used), then stopped at 0 when the model is left-censored. Storing the location `mu = beta * xgb_mean + alpha` alone is wrong: that is the posterior of the mean, and the dashboard would show spike densities. `payload.distribution` is `posterior`. `payload.predictive` is `observation`. `model_version` is `pymc-m6-v1`.
 
 ### Consequences
 

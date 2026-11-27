@@ -206,6 +206,34 @@ def test_predictive_summary_stops_draws_at_zero() -> None:
     assert plain == 1.0
 
 
+def test_predictive_draws_include_observation_noise() -> None:
+    """Stored std must reflect sigma, not only var(mu). Catches M6 B1."""
+    from app.models.posterior_fit import _predictive_draws
+    from app.models.posterior_model import predictive_summary
+
+    n = 4000
+    beta = np.ones(n)
+    # Near-constant location; location-only std would be ~0.
+    alpha = np.zeros((n, 1))
+    sigma = np.full(n, 6.5)
+    gamma = np.zeros(n)
+    rng = np.random.default_rng(0)
+    draws = _predictive_draws(
+        15.0,
+        beta=beta,
+        alpha=alpha,
+        sigma=sigma,
+        gamma=gamma,
+        slot=0,
+        covariate_z=0.0,
+        rng=rng,
+    )
+    _, std, _, _, _ = predictive_summary(draws, clip_at_zero=False)
+    assert std > 5.0
+    location_only = beta * 15.0 + alpha[:, 0]
+    assert float(location_only.std(ddof=1)) < 1e-9
+
+
 def test_residual_intercept_has_no_slope_on_the_level() -> None:
     from app.models.posterior import residual_intercept
 

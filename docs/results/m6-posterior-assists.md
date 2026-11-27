@@ -24,7 +24,7 @@ The M5 figure of 0.159651 is 18878 contracts across points, rebounds, and assist
 Residual-band Brier: 0.150863 on 5329 contracts.
 Posterior Brier: 0.147770 on 5329 contracts.
 Assists MAE, XGBoost clipped mean: 1.358 on 20757 player-props.
-Assists MAE, posterior predictive mean: 1.353 on 20757 player-props.
+Assists MAE, posterior predictive mean: 1.379 on 20757 player-props.
 
 Divergences: 0.
 Population parameters, unrounded, printed to 4 decimals:

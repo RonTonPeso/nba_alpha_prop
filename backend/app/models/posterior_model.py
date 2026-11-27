@@ -34,8 +34,9 @@ def predictive_summary(
 ) -> tuple[float, float, float, float, float]:
     """Mean, sample sd, and 10/50/90 of one row's posterior predictive draws.
 
-    With ``clip_at_zero``, each draw is the latent normal stopped at 0.
-    That is the predictive distribution of the censored points model.
+    ``latent`` must already be observation draws ``y ~ N(mu, sigma)`` (or
+    the heteroscedastic width), not the location ``mu`` alone. With
+    ``clip_at_zero``, each draw is stopped at 0 for the censored model.
     """
     draws = np.asarray(latent, dtype=np.float64).reshape(-1)
     if clip_at_zero:
